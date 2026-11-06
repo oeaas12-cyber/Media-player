@@ -19,6 +19,7 @@ import com.prism.player.data.i
 import com.prism.player.data.l
 import com.prism.player.data.o
 import com.prism.player.data.obj
+import com.prism.player.data.objects
 import com.prism.player.data.s
 import com.prism.player.data.strings
 import kotlinx.coroutines.sync.Mutex
@@ -265,6 +266,51 @@ class JellyfinSource(override val config: SourceConfig, private val deviceId: St
             }
             val headline = "Couldn't sign in."
             throw IOException(headline + "\n\nWhat the server answered:\n" + attempts.joinToString("\n") { "• $it" })
+        }
+
+        /**
+         * Connects with an access token / API key instead of a password. API keys aren't
+         * tied to a user, so the user is found by name (or the only user, or /Users/Me).
+         */
+        suspend fun connectWithToken(url: String, token: String, username: String, deviceId: String): SourceConfig {
+            val root = normaliseUrl(url).removeSuffix("/emby")
+            val headers = authHeaders(deviceId, token)
+            var lastError: Exception? = null
+            for (base in listOf(root, "$root/emby")) {
+                val info = runCatching { Net.getJson("$base/System/Info/Public").obj() }.getOrNull()
+                if (info == null && base == root) continue
+                try {
+                    val me = runCatching { Net.getJson("$base/Users/Me", headers).obj() }.getOrNull()
+                    val user = me?.takeIf { it.s("Id") != null }
+                        ?: Net.getJson("$base/Users", headers).objects().let { users ->
+                            when {
+                                username.isNotBlank() -> users.firstOrNull { it.s("Name").equals(username.trim(), ignoreCase = true) }
+                                    ?: error("No user named \"${username.trim()}\" on this server")
+                                users.size == 1 -> users.first()
+                                else -> error("This key works for several users. Enter your username too.")
+                            }
+                        }
+                    val userId = user.s("Id") ?: error("Couldn't find the user")
+                    // Confirm the token can read this user's library.
+                    Net.getJson("$base/Users/$userId/Views", headers)
+                    return SourceConfig(
+                        id = UUID.randomUUID().toString(),
+                        type = SourceType.JELLYFIN,
+                        name = info?.s("ServerName") ?: Uri.parse(base).host ?: "Media server",
+                        url = base,
+                        username = user.s("Name") ?: username,
+                        token = token,
+                        userId = userId,
+                    )
+                } catch (e: HttpException) {
+                    lastError = if (e.code == 401 || e.code == 403)
+                        IOException("The server didn't accept this token (HTTP ${e.code}). Check it's complete and still valid.")
+                    else e
+                } catch (e: Exception) {
+                    lastError = e
+                }
+            }
+            throw lastError ?: IOException("Couldn't reach the server at $root")
         }
 
         /** Emby-style client header (the format Emby's own apps send). */

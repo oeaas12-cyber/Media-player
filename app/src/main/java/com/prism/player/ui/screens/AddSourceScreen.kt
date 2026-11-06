@@ -105,9 +105,15 @@ fun AddSourceScreen(type: SourceType, onDone: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 when (type) {
-                    SourceType.JELLYFIN -> JellyfinForm(busy) { url, user, pass ->
-                        attempt { JellyfinSource.login(url, user, pass, container.settings.current().deviceId) }
-                    }
+                    SourceType.JELLYFIN -> JellyfinForm(
+                        busy,
+                        onSubmit = { url, user, pass ->
+                            attempt { JellyfinSource.login(url, user, pass, container.settings.current().deviceId) }
+                        },
+                        onToken = { url, token, user ->
+                            attempt { JellyfinSource.connectWithToken(url, token, user, container.settings.current().deviceId) }
+                        },
+                    )
                     SourceType.PLEX -> PlexForm(busy, ::attempt)
                     SourceType.SMB -> SmbForm(busy) { name, host, path, user, pass, domain ->
                         attempt {
@@ -189,12 +195,31 @@ private fun Field(
 }
 
 @Composable
-private fun JellyfinForm(busy: Boolean, onSubmit: (String, String, String) -> Unit) {
+private fun JellyfinForm(busy: Boolean, onSubmit: (String, String, String) -> Unit, onToken: (String, String, String) -> Unit) {
     var url by rememberSaveable { mutableStateOf("") }
     var user by rememberSaveable { mutableStateOf("") }
     var pass by remember { mutableStateOf("") }
-    Text("Sign in to your Jellyfin or Emby server. Use the same address and account as in the server's web page.", color = Palette.TextSecondary)
+    var useToken by rememberSaveable { mutableStateOf(false) }
+    var token by remember { mutableStateOf("") }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        GlassChip("Username & password", !useToken) { useToken = false }
+        GlassChip("Access token / API key", useToken) { useToken = true }
+    }
     Field("Server address", url, { url = it }, hint = "http://192.168.1.10:8096", keyboard = KeyboardType.Uri)
+    if (useToken) {
+        Text(
+            "Paste an access token or API key from your server admin or provider " +
+                "(Emby: Dashboard → Advanced → API Keys; Jellyfin: Dashboard → API Keys).",
+            color = Palette.TextSecondary,
+        )
+        Field("Access token / API key", token, { token = it.trim() }, password = true)
+        Field("Username (needed if the key isn't tied to one user)", user, { user = it })
+        GlassButton("Connect", primary = true) {
+            if (!busy && url.isNotBlank() && token.isNotBlank()) onToken(url.trim(), token, user.trim())
+        }
+        return
+    }
+    Text("Sign in to your Jellyfin or Emby server. Use the same address and account as in the server's web page.", color = Palette.TextSecondary)
     Field("Username", user, { user = it })
     Field("Password", pass, { pass = it }, password = true)
     val warnings = credentialWarnings("username", user) + credentialWarnings("password", pass)
