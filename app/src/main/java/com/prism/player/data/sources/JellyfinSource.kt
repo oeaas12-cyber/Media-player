@@ -26,6 +26,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import okhttp3.FormBody
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -186,55 +187,65 @@ class JellyfinSource(override val config: SourceConfig, private val deviceId: St
          */
         suspend fun login(url: String, username: String, password: String, deviceId: String): SourceConfig {
             val root = normaliseUrl(url).removeSuffix("/emby")
-            val bases = listOf(root, "$root/emby")
-            val body = buildJsonObject {
-                put("Username", username)
-                put("Pw", password)
-                put("Password", password)
-            }.toString()
-            val headerStyles = listOf(authHeaders(deviceId, null), embyHeaders(deviceId))
+            val bases = listOf("" to root, "/emby" to "$root/emby")
+            val styles = listOf("Emby header" to embyHeaders(deviceId), "Jellyfin header" to authHeaders(deviceId, null))
+            val pwJson = buildJsonObject { put("Username", username); put("Pw", password) }.toString()
+                .toRequestBody("application/json".toMediaType())
+            val pwForm = FormBody.Builder().add("Username", username).add("Pw", password).build()
+            val legacyJson = buildJsonObject { put("Username", username); put("Pw", password); put("Password", password) }
+                .toString().toRequestBody("application/json".toMediaType())
+            val bodies = listOf("JSON" to pwJson, "form" to pwForm, "JSON+Password" to legacyJson)
 
-            var lastError: Exception? = null
-            for (base in bases) {
-                for (headers in headerStyles) {
-                    val res = try {
-                        Net.json.parseToJsonElement(
-                            Net.send(
-                                Request.Builder().url("$base/Users/AuthenticateByName")
-                                    .post(body.toRequestBody("application/json".toMediaType()))
-                                    .header("Accept", "application/json")
-                                    .apply { headers.forEach { (k, v) -> header(k, v) } }
-                                    .build()
-                            )
-                        ).obj()
-                    } catch (e: Exception) {
-                        // Keep the most informative error: a 401 beats a 404 from a wrong path.
-                        if (lastError !is HttpException || (e is HttpException && e.code == 401)) lastError = e
-                        continue
+            val attempts = mutableListOf<String>()
+            var saw401: HttpException? = null
+            for ((suffix, base) in bases) {
+                var pathMissing = false
+                for ((styleName, headers) in styles) {
+                    if (pathMissing) break
+                    for ((bodyName, body) in bodies) {
+                        val label = "${suffix.ifEmpty { "/" }} · $styleName · $bodyName"
+                        val res = try {
+                            Net.json.parseToJsonElement(
+                                Net.send(
+                                    Request.Builder().url("$base/Users/AuthenticateByName")
+                                        .post(body)
+                                        .header("Accept", "application/json")
+                                        .header("User-Agent", "$CLIENT/$VERSION (Android)")
+                                        .apply { headers.forEach { (k, v) -> header(k, v) } }
+                                        .build()
+                                )
+                            ).obj()
+                        } catch (e: HttpException) {
+                            val msg = e.body.trim().take(120).takeIf { it.isNotBlank() && !it.startsWith("<") }
+                            attempts += "$label → HTTP ${e.code}${msg?.let { ": $it" } ?: ""}"
+                            if (e.code == 401 || e.code == 403) saw401 = e
+                            if (e.code == 404 || e.code == 405) { pathMissing = true; break }
+                            continue
+                        } catch (e: Exception) {
+                            attempts += "$label → ${e.message ?: e.javaClass.simpleName}"
+                            continue
+                        }
+                        val token = res?.s("AccessToken")
+                        val userId = res?.o("User")?.s("Id")
+                        if (token == null || userId == null) {
+                            attempts += "$label → unexpected response"
+                            continue
+                        }
+                        val info = runCatching { Net.getJson("$base/System/Info/Public").obj() }.getOrNull()
+                        return SourceConfig(
+                            id = UUID.randomUUID().toString(),
+                            type = SourceType.JELLYFIN,
+                            name = info?.s("ServerName") ?: Uri.parse(base).host ?: "Media server",
+                            url = base,
+                            username = username,
+                            token = token,
+                            userId = userId,
+                        )
                     }
-                    val token = res?.s("AccessToken") ?: continue
-                    val userId = res.o("User")?.s("Id") ?: continue
-                    val info = runCatching { Net.getJson("$base/System/Info/Public").obj() }.getOrNull()
-                    return SourceConfig(
-                        id = UUID.randomUUID().toString(),
-                        type = SourceType.JELLYFIN,
-                        name = info?.s("ServerName") ?: Uri.parse(base).host ?: "Media server",
-                        url = base,
-                        username = username,
-                        token = token,
-                        userId = userId,
-                    )
                 }
             }
-            val e = lastError
-            if (e is HttpException && e.code == 401) {
-                val detail = e.body.trim().take(200).takeIf { it.isNotBlank() && !it.startsWith("<") }
-                throw IOException(
-                    "The server rejected the sign-in (HTTP 401)" + (detail?.let { ": $it" } ?: "") +
-                        ". Check the username and password. They are case-sensitive, and the letter O and the number 0 look alike."
-                )
-            }
-            throw e ?: IOException("Couldn't sign in")
+            val headline = if (saw401 != null) "The server refused the sign-in." else "Couldn't sign in."
+            throw IOException(headline + "\n\nWhat the server answered:\n" + attempts.joinToString("\n") { "• $it" })
         }
 
         /** Emby-style client header (the format Emby's own apps send). */
