@@ -188,8 +188,16 @@ class JellyfinSource(override val config: SourceConfig, private val deviceId: St
         suspend fun login(url: String, username: String, password: String, deviceId: String): SourceConfig {
             val root = normaliseUrl(url).removeSuffix("/emby")
             val bases = listOf("" to root, "/emby" to "$root/emby")
-            // One header set understood by both Emby and Jellyfin.
-            val styles = listOf("standard" to (embyHeaders(deviceId) + authHeaders(deviceId, null)))
+            // Ask the server what it is (public page, not a sign-in attempt) and send only the
+            // headers that product expects; Emby's own web app sends no Authorization header.
+            val product = bases.firstNotNullOfOrNull { (_, b) ->
+                runCatching { Net.getJson("$b/System/Info/Public").obj()?.s("ProductName") }.getOrNull()
+            }
+            val isJellyfin = product?.contains("Jellyfin", ignoreCase = true) == true
+            val styles = listOf(
+                if (isJellyfin) "Jellyfin" to authHeaders(deviceId, null)
+                else "Emby" to embyHeaders(deviceId)
+            )
             // Form body first: it's what Emby's own web app sends. JSON only if the server
             // doesn't understand the form (never after a rejected password).
             val pwForm = FormBody.Builder().add("Username", username).add("Pw", password).build()
