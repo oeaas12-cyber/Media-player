@@ -2,6 +2,7 @@ package com.prism.player.ui
 
 import android.net.Uri
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -21,6 +22,7 @@ import com.prism.player.ui.screens.HomeScreen
 import com.prism.player.ui.screens.LibraryScreen
 import com.prism.player.ui.screens.SearchScreen
 import com.prism.player.ui.screens.SettingsScreen
+import com.prism.player.update.UpdateManager
 
 object Routes {
     fun detail(id: String) = "detail/${Uri.encode(id)}"
@@ -34,6 +36,7 @@ fun appContainer(): AppContainer = (LocalContext.current.applicationContext as P
 @Composable
 fun AppNavigation() {
     val nav = rememberNavController()
+    LaunchedEffect(Unit) { UpdateManager.check() }
     val onTab: (Tab) -> Unit = { tab -> nav.navigateTab(tab) }
     NavHost(navController = nav, startDestination = Tab.HOME.route) {
         composable(Tab.HOME.route) {

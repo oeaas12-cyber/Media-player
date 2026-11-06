@@ -27,22 +27,23 @@ jobs:
         env:
           KEYSTORE_BASE64: ${{ secrets.PRISM_KEYSTORE_BASE64 }}
         run: |
-          if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
-            echo "PRISM_KEYSTORE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
-          else
-            echo "No PRISM_KEYSTORE_BASE64 secret: release APK will be signed with a debug key."
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::Add the PRISM_KEYSTORE_BASE64 and PRISM_KEYSTORE_PASSWORD repository secrets first. Releases must always be signed with the same key, or in-app updates can't install."
+            exit 1
           fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          echo "PRISM_KEYSTORE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
       - name: Build release APK
         env:
           PRISM_KEYSTORE_PASSWORD: ${{ secrets.PRISM_KEYSTORE_PASSWORD }}
-          PRISM_KEY_ALIAS: ${{ secrets.PRISM_KEY_ALIAS }}
-          PRISM_KEY_PASSWORD: ${{ secrets.PRISM_KEY_PASSWORD }}
         run: |
-          chmod +x gradlew
-          ./gradlew assembleRelease --stacktrace
           VERSION="${{ github.event.inputs.version || github.ref_name }}"
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          export PRISM_VERSION="$VERSION"
+          export PRISM_KEY_ALIAS="prism"
+          export PRISM_KEY_PASSWORD="$PRISM_KEYSTORE_PASSWORD"
+          chmod +x gradlew
+          ./gradlew assembleRelease --stacktrace
           NAME="PrismPlayer-${VERSION}.apk"
           cp app/build/outputs/apk/release/app-release.apk "$NAME"
           echo "APK=$NAME" >> "$GITHUB_ENV"
@@ -59,5 +60,7 @@ jobs:
             **Install:** download `${{ env.APK }}` below.
             - Phone: open the file and allow installing from unknown sources.
             - Android TV: `adb install -r ${{ env.APK }}` or sideload with an app like Downloader.
+
+            Already installed? Open **Settings → Updates** in the app, or wait for the update card on the home screen.
 
             New here? Open the app and choose **Try the demo** to browse a sample library of open movies.

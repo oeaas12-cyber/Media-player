@@ -63,6 +63,8 @@ import com.prism.player.ui.components.formatDuration
 import com.prism.player.ui.components.glass
 import com.prism.player.ui.theme.LocalIsTv
 import com.prism.player.ui.theme.Palette
+import com.prism.player.update.UpdateCard
+import androidx.compose.runtime.saveable.rememberSaveable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
@@ -101,6 +103,7 @@ fun HomeScreen(onTab: (Tab) -> Unit, onOpen: (MediaItem) -> Unit, onPlay: (Media
     var backdrop by remember { mutableStateOf<String?>(null) }
     val tv = LocalIsTv.current
     val scope = rememberCoroutineScope()
+    var updateDismissed by rememberSaveable { mutableStateOf(false) }
 
     TopLevelScaffold(Tab.HOME, backdrop, onTab) {
         when (val s = state) {
@@ -135,6 +138,14 @@ fun HomeScreen(onTab: (Tab) -> Unit, onOpen: (MediaItem) -> Unit, onPlay: (Media
                         contentPadding = PaddingValues(bottom = 48.dp),
                         verticalArrangement = Arrangement.spacedBy(if (tv) 28.dp else 20.dp),
                     ) {
+                        if (!updateDismissed) {
+                            item(key = "update") {
+                                UpdateCard(
+                                    Modifier.padding(horizontal = if (tv) 48.dp else 16.dp),
+                                    onDismiss = { updateDismissed = true },
+                                )
+                            }
+                        }
                         if (data.hero.isNotEmpty()) {
                             item(key = "hero") {
                                 Hero(data.hero, onPlay = onPlay, onOpen = onOpen, onShown = { backdrop = it.backdropUrl })

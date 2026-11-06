@@ -44,6 +44,8 @@ import com.prism.player.ui.components.TopLevelScaffold
 import com.prism.player.ui.components.glass
 import com.prism.player.ui.theme.LocalIsTv
 import com.prism.player.ui.theme.Palette
+import com.prism.player.update.UpdateCard
+import com.prism.player.update.UpdateManager
 import kotlinx.coroutines.launch
 
 @Composable
@@ -131,9 +133,21 @@ fun SettingsScreen(onTab: (Tab) -> Unit, onAddSource: (SourceType) -> Unit) {
                     ChoiceRow("Skip forward", listOf("10s" to 10, "15s" to 15, "30s" to 30, "60s" to 60), p.skipForwardSeconds) { v -> updatePlayer { it.copy(skipForwardSeconds = v) } }
                 }
             }
+            item { SectionTitle("Updates") }
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Text("Version ${UpdateManager.currentVersion}", color = Palette.TextPrimary, modifier = Modifier.weight(1f))
+                        GlassButton("Check for updates", Icons.Filled.Refresh) {
+                            scope.launch { UpdateManager.check(force = true) }
+                        }
+                    }
+                    UpdateCard(showUpToDate = true)
+                }
+            }
             item {
                 Text(
-                    "Prism Player 0.1.0 · Plays media from servers and shares you own.",
+                    "Prism Player ${UpdateManager.currentVersion} · Plays media from servers and shares you own.",
                     color = Palette.TextTertiary, modifier = Modifier.padding(vertical = 24.dp),
                 )
             }

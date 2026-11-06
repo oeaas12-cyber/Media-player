@@ -14,8 +14,13 @@ android {
         applicationId = "com.prism.player"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        // Release builds get their version from the tag (PRISM_VERSION=v1.2.3); local builds are "0.1.0".
+        val versionFromTag = System.getenv("PRISM_VERSION")?.removePrefix("v")?.takeIf { it.isNotBlank() }
+        val vName = versionFromTag ?: "0.1.0"
+        val parts = vName.split('.', '-').map { it.toIntOrNull() ?: 0 } + listOf(0, 0, 0)
+        versionCode = (parts[0] * 10_000 + parts[1] * 100 + parts[2]).coerceAtLeast(1)
+        versionName = vName
+        buildConfigField("String", "UPDATE_REPO", "\"oeaas12-cyber/Media-player\"")
     }
 
     // Release signing: set PRISM_KEYSTORE (+ passwords/alias) to sign with your own key,
@@ -60,6 +65,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     packaging {
         resources {

@@ -84,9 +84,14 @@ You need JDK 17 and the Android SDK (API 34).
 - Some codecs (DTS, TrueHD, some HEVC profiles) depend on what the device can decode. If your device can't play a file directly, Jellyfin/Plex sources are the most reliable option.
 - Passwords for SMB/WebDAV are stored in the app's private storage on the device.
 
-## Releases
+## Releases and in-app updates
 
-Push a tag such as `v0.1.1` to publish a GitHub Release with the APK attached (`.github/workflows/release.yml`).
-To sign releases with your own key, which lets updates install over older versions, add these repository secrets:
-`PRISM_KEYSTORE_BASE64` (the base64 of your `.jks`), `PRISM_KEYSTORE_PASSWORD`, `PRISM_KEY_ALIAS` and `PRISM_KEY_PASSWORD`.
-Without them, the release is signed with a temporary debug key.
+The app checks GitHub Releases when it starts, and when you press **Settings → Updates → Check for updates**.
+When a newer version exists, it shows an update card. **Update now** downloads the APK and hands it to Android's installer.
+
+To publish a version, run **Actions → Release → Run workflow** and enter a version such as `v0.2.1`.
+The version number must be higher than the previous one.
+
+Releases are signed with one permanent key, which Android requires before it will install an update over an existing app.
+The key is stored in two repository secrets, `PRISM_KEYSTORE_BASE64` and `PRISM_KEYSTORE_PASSWORD`.
+The release workflow refuses to run without them, so a release can never be signed with the wrong key.
