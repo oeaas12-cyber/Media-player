@@ -18,6 +18,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -173,8 +175,8 @@ private fun Field(
             {
                 androidx.compose.material3.IconButton(onClick = { reveal = !reveal }) {
                     androidx.compose.material3.Icon(
-                        if (reveal) androidx.compose.material.icons.Icons.Filled.VisibilityOff
-                        else androidx.compose.material.icons.Icons.Filled.Visibility,
+                        if (reveal) Icons.Filled.VisibilityOff
+                        else Icons.Filled.Visibility,
                         contentDescription = if (reveal) "Hide password" else "Show password",
                     )
                 }
