@@ -174,8 +174,9 @@ class JellyfinSource(override val config: SourceConfig, private val deviceId: St
                 append("MediaBrowser Client=\"$CLIENT\", Device=\"Android\", DeviceId=\"$deviceId\", Version=\"$VERSION\"")
                 if (!token.isNullOrBlank()) append(", Token=\"$token\"")
             }
+            // Match Emby web / Infuse / StreamBridge exactly: only X-Emby-Authorization and
+            // X-Emby-Token. A plain Authorization header is what reseller proxies reject.
             return buildMap {
-                put("Authorization", auth)
                 put("X-Emby-Authorization", auth)
                 if (!token.isNullOrBlank()) put("X-Emby-Token", token)
             }
