@@ -188,13 +188,16 @@ class JellyfinSource(override val config: SourceConfig, private val deviceId: St
         suspend fun login(url: String, username: String, password: String, deviceId: String): SourceConfig {
             val root = normaliseUrl(url).removeSuffix("/emby")
             val bases = listOf("" to root, "/emby" to "$root/emby")
-            val styles = listOf("Emby header" to embyHeaders(deviceId), "Jellyfin header" to authHeaders(deviceId, null))
+            // One header set understood by both Emby and Jellyfin.
+            val styles = listOf("standard" to (embyHeaders(deviceId) + authHeaders(deviceId, null)))
+            // Form body first: it's what Emby's own web app sends. JSON only if the server
+            // doesn't understand the form (never after a rejected password).
+            val pwForm = FormBody.Builder().add("Username", username).add("Pw", password).build()
             val pwJson = buildJsonObject { put("Username", username); put("Pw", password) }.toString()
                 .toRequestBody("application/json".toMediaType())
-            val pwForm = FormBody.Builder().add("Username", username).add("Pw", password).build()
-            val legacyJson = buildJsonObject { put("Username", username); put("Pw", password); put("Password", password) }
-                .toString().toRequestBody("application/json".toMediaType())
-            val bodies = listOf("JSON" to pwJson, "form" to pwForm, "JSON+Password" to legacyJson)
+            val bodies = listOf("form" to pwForm, "JSON" to pwJson)
+            val query = "?X-Emby-Client=${Uri.encode(CLIENT)}&X-Emby-Device-Name=Android" +
+                "&X-Emby-Device-Id=${Uri.encode(deviceId)}&X-Emby-Client-Version=$VERSION"
 
             val attempts = mutableListOf<String>()
             for ((suffix, base) in bases) {
@@ -206,7 +209,7 @@ class JellyfinSource(override val config: SourceConfig, private val deviceId: St
                         val res = try {
                             Net.json.parseToJsonElement(
                                 Net.send(
-                                    Request.Builder().url("$base/Users/AuthenticateByName")
+                                    Request.Builder().url("$base/Users/AuthenticateByName$query")
                                         .post(body)
                                         .header("Accept", "application/json")
                                         .header("User-Agent", "$CLIENT/$VERSION (Android)")
@@ -259,7 +262,7 @@ class JellyfinSource(override val config: SourceConfig, private val deviceId: St
         /** Emby-style client header (the format Emby's own apps send). */
         fun embyHeaders(deviceId: String): Map<String, String> = mapOf(
             "X-Emby-Authorization" to
-                "Emby UserId=\"\", Client=\"$CLIENT\", Device=\"Android\", DeviceId=\"$deviceId\", Version=\"$VERSION\"",
+                "Emby Client=\"$CLIENT\", Device=\"Android\", DeviceId=\"$deviceId\", Version=\"$VERSION\"",
             "X-Emby-Client" to CLIENT,
             "X-Emby-Device-Name" to "Android",
             "X-Emby-Device-Id" to deviceId,
