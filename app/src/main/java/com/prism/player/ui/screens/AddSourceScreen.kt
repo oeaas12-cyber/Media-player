@@ -162,13 +162,25 @@ private fun Field(
     hint: String? = null,
     keyboard: KeyboardType = KeyboardType.Text,
 ) {
+    var reveal by remember { mutableStateOf(false) }
     OutlinedTextField(
         value = value,
         onValueChange = onChange,
         label = { Text(label) },
         placeholder = if (hint != null) { { Text(hint) } } else null,
         singleLine = true,
-        visualTransformation = if (password) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
+        trailingIcon = if (password) {
+            {
+                androidx.compose.material3.IconButton(onClick = { reveal = !reveal }) {
+                    androidx.compose.material3.Icon(
+                        if (reveal) androidx.compose.material.icons.Icons.Filled.VisibilityOff
+                        else androidx.compose.material.icons.Icons.Filled.Visibility,
+                        contentDescription = if (reveal) "Hide password" else "Show password",
+                    )
+                }
+            }
+        } else null,
+        visualTransformation = if (password && !reveal) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
         keyboardOptions = KeyboardOptions(keyboardType = if (password) KeyboardType.Password else keyboard),
         modifier = Modifier.fillMaxWidth(),
     )

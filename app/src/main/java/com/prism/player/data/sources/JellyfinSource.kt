@@ -197,7 +197,6 @@ class JellyfinSource(override val config: SourceConfig, private val deviceId: St
             val bodies = listOf("JSON" to pwJson, "form" to pwForm, "JSON+Password" to legacyJson)
 
             val attempts = mutableListOf<String>()
-            var saw401: HttpException? = null
             for ((suffix, base) in bases) {
                 var pathMissing = false
                 for ((styleName, headers) in styles) {
@@ -218,7 +217,16 @@ class JellyfinSource(override val config: SourceConfig, private val deviceId: St
                         } catch (e: HttpException) {
                             val msg = e.body.trim().take(120).takeIf { it.isNotBlank() && !it.startsWith("<") }
                             attempts += "$label → HTTP ${e.code}${msg?.let { ": $it" } ?: ""}"
-                            if (e.code == 401 || e.code == 403) saw401 = e
+                            // A real "wrong credentials" / "locked" answer: stop immediately.
+                            // Retrying the same password only counts as more failed logins on the server.
+                            if (e.code == 401 || e.code == 403) {
+                                throw IOException(
+                                    (msg ?: "The server refused the sign-in (HTTP ${e.code}).") +
+                                        if (e.code == 401) "\n\nThe server says the username or password doesn't match. " +
+                                            "Check them on the server's web page in a browser. Too many failed tries can lock the account for a while."
+                                        else ""
+                                )
+                            }
                             if (e.code == 404 || e.code == 405) { pathMissing = true; break }
                             continue
                         } catch (e: Exception) {
@@ -244,7 +252,7 @@ class JellyfinSource(override val config: SourceConfig, private val deviceId: St
                     }
                 }
             }
-            val headline = if (saw401 != null) "The server refused the sign-in." else "Couldn't sign in."
+            val headline = "Couldn't sign in."
             throw IOException(headline + "\n\nWhat the server answered:\n" + attempts.joinToString("\n") { "• $it" })
         }
 
