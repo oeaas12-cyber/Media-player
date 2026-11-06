@@ -269,6 +269,28 @@ class JellyfinSource(override val config: SourceConfig, private val deviceId: St
         }
 
         /**
+         * Finishes a web-page sign-in: verifies the token the server issued to that login
+         * session and saves it as a source. The user already authenticated on the server's page.
+         */
+        suspend fun connectWithSession(baseUrl: String, token: String, userId: String, serverName: String?, deviceId: String): SourceConfig {
+            val base = normaliseUrl(baseUrl).trimEnd('/')
+            val headers = authHeaders(deviceId, token)
+            val user = runCatching { Net.getJson("$base/Users/$userId", headers).obj() }.getOrNull()
+            // Confirm the token really works for this user's library.
+            Net.getJson("$base/Users/$userId/Views", headers)
+            val info = runCatching { Net.getJson("$base/System/Info/Public").obj() }.getOrNull()
+            return SourceConfig(
+                id = UUID.randomUUID().toString(),
+                type = SourceType.JELLYFIN,
+                name = serverName ?: info?.s("ServerName") ?: Uri.parse(base).host ?: "Media server",
+                url = base,
+                username = user?.s("Name").orEmpty(),
+                token = token,
+                userId = userId,
+            )
+        }
+
+        /**
          * Connects with an access token / API key instead of a password. API keys aren't
          * tied to a user, so the user is found by name (or the only user, or /Users/Me).
          */

@@ -68,6 +68,7 @@ fun AddSourceScreen(type: SourceType, onDone: () -> Unit) {
 
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var webLoginUrl by remember { mutableStateOf<String?>(null) }
 
     fun save(cfg: SourceConfig) = scope.launch {
         container.settings.update { it.copy(sources = it.sources.filterNot { s -> s.id == cfg.id } + cfg) }
@@ -84,6 +85,27 @@ fun AddSourceScreen(type: SourceType, onDone: () -> Unit) {
                 .onFailure { error = it.message ?: it.javaClass.simpleName }
             busy = false
         }
+    }
+
+    val activeWebLogin = webLoginUrl
+    if (activeWebLogin != null) {
+        Box(Modifier.fillMaxSize()) {
+            GlassBackdrop(null)
+            WebLoginScreen(
+                initialUrl = activeWebLogin,
+                onCancel = { webLoginUrl = null },
+                onSession = { session ->
+                    webLoginUrl = null
+                    attempt {
+                        JellyfinSource.connectWithSession(
+                            session.baseUrl, session.token, session.userId, session.serverName,
+                            container.settings.current().deviceId,
+                        )
+                    }
+                },
+            )
+        }
+        return
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -113,6 +135,7 @@ fun AddSourceScreen(type: SourceType, onDone: () -> Unit) {
                         onToken = { url, token, user ->
                             attempt { JellyfinSource.connectWithToken(url, token, user, container.settings.current().deviceId) }
                         },
+                        onWebLogin = { url -> webLoginUrl = JellyfinSource.normaliseUrl(url) },
                     )
                     SourceType.PLEX -> PlexForm(busy, ::attempt)
                     SourceType.SMB -> SmbForm(busy) { name, host, path, user, pass, domain ->
@@ -195,17 +218,35 @@ private fun Field(
 }
 
 @Composable
-private fun JellyfinForm(busy: Boolean, onSubmit: (String, String, String) -> Unit, onToken: (String, String, String) -> Unit) {
+private fun JellyfinForm(
+    busy: Boolean,
+    onSubmit: (String, String, String) -> Unit,
+    onToken: (String, String, String) -> Unit,
+    onWebLogin: (String) -> Unit,
+) {
     var url by rememberSaveable { mutableStateOf("") }
     var user by rememberSaveable { mutableStateOf("") }
     var pass by remember { mutableStateOf("") }
-    var useToken by rememberSaveable { mutableStateOf(false) }
+    var mode by rememberSaveable { mutableStateOf(0) } // 0 password, 1 token, 2 web page
+    val useToken = mode == 1
     var token by remember { mutableStateOf("") }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        GlassChip("Username & password", !useToken) { useToken = false }
-        GlassChip("Access token / API key", useToken) { useToken = true }
+        GlassChip("Username & password", mode == 0) { mode = 0 }
+        GlassChip("Access token / API key", mode == 1) { mode = 1 }
+        GlassChip("Sign in on server page", mode == 2) { mode = 2 }
     }
     Field("Server address", url, { url = it }, hint = "http://192.168.1.10:8096", keyboard = KeyboardType.Uri)
+    if (mode == 2) {
+        Text(
+            "Opens your server's own sign-in page. Log in there the same way you do in a browser, " +
+                "and Prism keeps the session your server gives you.",
+            color = Palette.TextSecondary,
+        )
+        GlassButton("Open sign-in page", primary = true) {
+            if (!busy && url.isNotBlank()) onWebLogin(url.trim())
+        }
+        return
+    }
     if (useToken) {
         Text(
             "Paste an access token or API key from your server admin or provider " +
