@@ -185,7 +185,7 @@ private fun Hero(
         Modifier
             .padding(horizontal = if (tv) 48.dp else 16.dp)
             .fillMaxWidth()
-            .height(if (tv) 360.dp else 230.dp)
+            .height(if (tv) 300.dp else 230.dp)
             .glass(shape)
     ) {
         AnimatedContent(item, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "hero") { current ->

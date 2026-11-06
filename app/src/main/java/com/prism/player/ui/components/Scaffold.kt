@@ -168,6 +168,7 @@ fun MessageState(
 }
 
 fun formatDuration(ms: Long): String {
+    if (ms < 60_000) return "${(ms / 1000).coerceAtLeast(1)}s"
     val totalMin = ms / 60_000
     val h = totalMin / 60
     val m = totalMin % 60

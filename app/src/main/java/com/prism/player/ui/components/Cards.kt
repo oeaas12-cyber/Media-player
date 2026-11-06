@@ -129,7 +129,8 @@ fun PosterCard(
             if (sub != null) {
                 Text(sub, style = MaterialTheme.typography.labelMedium, color = Palette.TextTertiary, maxLines = 1)
             }
-        } else {
+        } else if (item.seriesTitle != null) {
+            // Episode cards show the series on the artwork and the episode name underneath.
             Spacer(Modifier.height(6.dp))
             Text(
                 item.title, style = MaterialTheme.typography.labelMedium,

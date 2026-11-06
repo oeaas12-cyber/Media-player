@@ -5,6 +5,31 @@ movies and shows you already own: on a Jellyfin/Emby or Plex server, a network s
 (SMB) or a WebDAV folder. It's an original app built with Kotlin, Jetpack Compose and
 Media3/ExoPlayer, and it isn't affiliated with any other player.
 
+## Screenshots
+
+These are rendered automatically from the real app code at TV and phone sizes (see `app/src/test`), using the built-in demo library.
+They're refreshed on every push.
+
+**Android TV**
+
+| Home | Movies |
+|---|---|
+| ![Home](docs/screenshots/tv-home.png) | ![Movies](docs/screenshots/tv-movies.png) |
+| **Movie details** | **TV show with episodes** |
+| ![Movie details](docs/screenshots/tv-movie-detail.png) | ![Show details](docs/screenshots/tv-show-detail.png) |
+| **Player controls** | **Subtitle picker** |
+| ![Player](docs/screenshots/tv-player.png) | ![Subtitles](docs/screenshots/tv-player-subtitles.png) |
+| **Settings** | |
+| ![Settings](docs/screenshots/tv-settings.png) | |
+
+**Phone**
+
+| Home | Movies | Movie | Show |
+|---|---|---|---|
+| ![](docs/screenshots/phone-home.png) | ![](docs/screenshots/phone-movies.png) | ![](docs/screenshots/phone-movie-detail.png) | ![](docs/screenshots/phone-show-detail.png) |
+
+The player screenshots show the controls drawn over a still frame with a sample subtitle list, because unit tests can't decode video.
+
 ## Features
 
 **Library**
@@ -36,8 +61,11 @@ are matched automatically. Sidecar subtitles (`.srt .vtt .ass .ssa`) next to the
 
 ## Install
 
-Every push builds APKs in GitHub Actions (**Actions → Android build → Artifacts →
-`prism-player-apks`**). The same APK runs on both TV and phone.
+Download the APK from the **[latest release](../../releases/latest)**. The same APK runs on both TV and phone.
+Every push also builds APKs in GitHub Actions (**Actions → Android build → Artifacts**).
+
+On first launch, choose **Try the demo** to browse a sample library of open-licensed Blender films
+(Big Buck Bunny, Elephants Dream, Sintel, Tears of Steel) streamed from Google's public test bucket.
 
 - **Phone:** open the APK and allow installing from unknown sources.
 - **Android TV:** `adb connect <tv-ip> && adb install -r app-release.apk`, or sideload it with an app such as *Downloader* or *Send Files to TV*.
@@ -55,3 +83,10 @@ You need JDK 17 and the Android SDK (API 34).
 - For artwork on SMB/WebDAV sources, add a free TMDB API key in **Settings → Metadata**, then press refresh on the source.
 - Some codecs (DTS, TrueHD, some HEVC profiles) depend on what the device can decode. If your device can't play a file directly, Jellyfin/Plex sources are the most reliable option.
 - Passwords for SMB/WebDAV are stored in the app's private storage on the device.
+
+## Releases
+
+Push a tag such as `v0.1.1` to publish a GitHub Release with the APK attached (`.github/workflows/release.yml`).
+To sign releases with your own key, which lets updates install over older versions, add these repository secrets:
+`PRISM_KEYSTORE_BASE64` (the base64 of your `.jks`), `PRISM_KEYSTORE_PASSWORD`, `PRISM_KEY_ALIAS` and `PRISM_KEY_PASSWORD`.
+Without them, the release is signed with a temporary debug key.
