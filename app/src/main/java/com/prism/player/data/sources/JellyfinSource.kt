@@ -3,6 +3,7 @@ package com.prism.player.data.sources
 import android.net.Uri
 import androidx.media3.common.MimeTypes
 import com.prism.player.data.ExternalSubtitle
+import com.prism.player.data.HttpException
 import com.prism.player.data.MediaItem
 import com.prism.player.data.MediaKind
 import com.prism.player.data.MediaSource
@@ -28,6 +29,7 @@ import kotlinx.serialization.json.put
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.IOException
 import java.time.Instant
 import java.util.UUID
 
@@ -84,7 +86,7 @@ class JellyfinSource(override val config: SourceConfig, private val deviceId: St
                 val ass = st.s("Codec")?.lowercase() in setOf("ass", "ssa")
                 val fmt = if (ass) "ass" else "vtt"
                 ExternalSubtitle(
-                    uri = "$base/Videos/${item.nativeId}/$msId/Subtitles/$index/0/Stream.$fmt?api_key=$token",
+                    uri = "$base/Videos/${item.nativeId}/$msId/Subtitles/$index/Stream.$fmt?api_key=$token",
                     mimeType = if (ass) MimeTypes.TEXT_SSA else MimeTypes.TEXT_VTT,
                     language = st.s("Language"),
                     label = st.s("DisplayTitle") ?: st.s("Title"),
@@ -177,31 +179,73 @@ class JellyfinSource(override val config: SourceConfig, private val deviceId: St
             }
         }
 
-        /** Signs in with username/password and returns a ready-to-save source. */
+        /**
+         * Signs in with username/password and returns a ready-to-save source.
+         * Works with Jellyfin and Emby: tries the server root and the /emby path, both
+         * header styles, and both password field names before giving up.
+         */
         suspend fun login(url: String, username: String, password: String, deviceId: String): SourceConfig {
-            val base = normaliseUrl(url)
-            val serverName = runCatching { Net.getJson("$base/System/Info/Public").obj()?.s("ServerName") }.getOrNull()
-            val body = buildJsonObject { put("Username", username); put("Pw", password) }
-                .toString().toRequestBody("application/json".toMediaType())
-            val res = Net.json.parseToJsonElement(
-                Net.send(
-                    Request.Builder().url("$base/Users/AuthenticateByName").post(body)
-                        .apply { authHeaders(deviceId, null).forEach { (k, v) -> header(k, v) } }
-                        .build()
+            val root = normaliseUrl(url).removeSuffix("/emby")
+            val bases = listOf(root, "$root/emby")
+            val body = buildJsonObject {
+                put("Username", username)
+                put("Pw", password)
+                put("Password", password)
+            }.toString()
+            val headerStyles = listOf(authHeaders(deviceId, null), embyHeaders(deviceId))
+
+            var lastError: Exception? = null
+            for (base in bases) {
+                for (headers in headerStyles) {
+                    val res = try {
+                        Net.json.parseToJsonElement(
+                            Net.send(
+                                Request.Builder().url("$base/Users/AuthenticateByName")
+                                    .post(body.toRequestBody("application/json".toMediaType()))
+                                    .header("Accept", "application/json")
+                                    .apply { headers.forEach { (k, v) -> header(k, v) } }
+                                    .build()
+                            )
+                        ).obj()
+                    } catch (e: Exception) {
+                        // Keep the most informative error: a 401 beats a 404 from a wrong path.
+                        if (lastError !is HttpException || (e is HttpException && e.code == 401)) lastError = e
+                        continue
+                    }
+                    val token = res?.s("AccessToken") ?: continue
+                    val userId = res.o("User")?.s("Id") ?: continue
+                    val info = runCatching { Net.getJson("$base/System/Info/Public").obj() }.getOrNull()
+                    return SourceConfig(
+                        id = UUID.randomUUID().toString(),
+                        type = SourceType.JELLYFIN,
+                        name = info?.s("ServerName") ?: Uri.parse(base).host ?: "Media server",
+                        url = base,
+                        username = username,
+                        token = token,
+                        userId = userId,
+                    )
+                }
+            }
+            val e = lastError
+            if (e is HttpException && e.code == 401) {
+                val detail = e.body.trim().take(200).takeIf { it.isNotBlank() && !it.startsWith("<") }
+                throw IOException(
+                    "The server rejected the sign-in (HTTP 401)" + (detail?.let { ": $it" } ?: "") +
+                        ". Check the username and password. They are case-sensitive, and the letter O and the number 0 look alike."
                 )
-            ).obj() ?: error("Unexpected server response")
-            val token = res.s("AccessToken") ?: error("Login failed")
-            val userId = res.o("User")?.s("Id") ?: error("Login failed")
-            return SourceConfig(
-                id = UUID.randomUUID().toString(),
-                type = SourceType.JELLYFIN,
-                name = serverName ?: Uri.parse(base).host ?: "Jellyfin",
-                url = base,
-                username = username,
-                token = token,
-                userId = userId,
-            )
+            }
+            throw e ?: IOException("Couldn't sign in")
         }
+
+        /** Emby-style client header (the format Emby's own apps send). */
+        fun embyHeaders(deviceId: String): Map<String, String> = mapOf(
+            "X-Emby-Authorization" to
+                "Emby UserId=\"\", Client=\"$CLIENT\", Device=\"Android\", DeviceId=\"$deviceId\", Version=\"$VERSION\"",
+            "X-Emby-Client" to CLIENT,
+            "X-Emby-Device-Name" to "Android",
+            "X-Emby-Device-Id" to deviceId,
+            "X-Emby-Client-Version" to VERSION,
+        )
 
         fun normaliseUrl(url: String): String {
             val u = url.trim().trimEnd('/')

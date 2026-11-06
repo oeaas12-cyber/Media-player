@@ -179,11 +179,11 @@ private fun JellyfinForm(busy: Boolean, onSubmit: (String, String, String) -> Un
     var url by rememberSaveable { mutableStateOf("") }
     var user by rememberSaveable { mutableStateOf("") }
     var pass by remember { mutableStateOf("") }
-    Text("Sign in to your Jellyfin or Emby server.", color = Palette.TextSecondary)
+    Text("Sign in to your Jellyfin or Emby server. Use the same address and account as in the server's web page.", color = Palette.TextSecondary)
     Field("Server address", url, { url = it }, hint = "http://192.168.1.10:8096", keyboard = KeyboardType.Uri)
     Field("Username", user, { user = it })
     Field("Password", pass, { pass = it }, password = true)
-    GlassButton("Sign in", primary = true) { if (!busy && url.isNotBlank() && user.isNotBlank()) onSubmit(url, user, pass) }
+    GlassButton("Sign in", primary = true) { if (!busy && url.isNotBlank() && user.isNotBlank()) onSubmit(url.trim(), user.trim(), pass) }
 }
 
 @Composable

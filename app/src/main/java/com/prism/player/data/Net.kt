@@ -29,8 +29,9 @@ object Net {
 
     suspend fun send(request: Request, client: OkHttpClient = this.client): String = withContext(Dispatchers.IO) {
         client.newCall(request).execute().use { r ->
-            if (!r.isSuccessful) throw IOException("HTTP ${r.code} from ${r.request.url.host}${r.request.url.encodedPath}")
-            r.body?.string().orEmpty()
+            val body = r.body?.string().orEmpty()
+            if (!r.isSuccessful) throw HttpException(r.code, "${r.request.url.host}${r.request.url.encodedPath}", body)
+            body
         }
     }
 
@@ -40,6 +41,10 @@ object Net {
     suspend fun getJson(url: String, headers: Map<String, String> = emptyMap()): JsonElement =
         json.parseToJsonElement(get(url, headers + ("Accept" to "application/json")))
 }
+
+/** Non-2xx response; keeps the server's own message so it can be shown to the user. */
+class HttpException(val code: Int, val where: String, val body: String) :
+    IOException("HTTP $code from $where" + body.trim().take(200).let { if (it.isBlank() || it.startsWith("<")) "" else ": $it" })
 
 // Small helpers for walking loosely-typed JSON from servers.
 fun JsonElement?.obj(): JsonObject? = this as? JsonObject
