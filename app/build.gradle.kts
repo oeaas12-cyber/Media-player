@@ -3,6 +3,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
+    id("io.github.takahirom.roborazzi")
 }
 
 android {
@@ -17,12 +18,37 @@ android {
         versionName = "0.1.0"
     }
 
+    // Release signing: set PRISM_KEYSTORE (+ passwords/alias) to sign with your own key,
+    // otherwise the release APK falls back to the debug key so it is still installable.
+    val keystorePath = System.getenv("PRISM_KEYSTORE")
+    val hasReleaseKey = keystorePath != null && file(keystorePath).exists()
+    signingConfigs {
+        create("release") {
+            if (hasReleaseKey) {
+                storeFile = file(keystorePath!!)
+                storePassword = System.getenv("PRISM_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("PRISM_KEY_ALIAS")
+                keyPassword = System.getenv("PRISM_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Signed with the debug key so the release APK is installable for testing.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName(if (hasReleaseKey) "release" else "debug")
+        }
+    }
+
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            all {
+                it.forkEvery = 1L
+                it.maxHeapSize = "3g"
+                it.systemProperty("robolectric.pixelCopyRenderMode", "hardware")
+            }
         }
     }
     compileOptions {
@@ -75,4 +101,13 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("eu.agno3.jcifs:jcifs-ng:2.1.10")
+
+    // Screenshot tests (Robolectric + Roborazzi) that render the real screens for docs/screenshots.
+    testImplementation(composeBom)
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.13")
+    testImplementation("androidx.test.ext:junit:1.2.1")
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.26.0")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

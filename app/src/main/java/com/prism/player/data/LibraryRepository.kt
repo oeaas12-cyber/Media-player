@@ -1,6 +1,7 @@
 package com.prism.player.data
 
 import android.content.Context
+import com.prism.player.data.sources.DemoSource
 import com.prism.player.data.sources.JellyfinSource
 import com.prism.player.data.sources.PlexSource
 import com.prism.player.data.sources.SmbSource
@@ -45,6 +46,7 @@ class LibraryRepository(
         SourceType.PLEX -> PlexSource(c, deviceId)
         SourceType.SMB -> SmbSource(c, context, tmdb)
         SourceType.WEBDAV -> WebDavSource(c, context, tmdb)
+        SourceType.DEMO -> DemoSource(c, context.packageName)
     }
 
     private suspend fun sourceOf(item: MediaItem) = sources().firstOrNull { it.config.id == item.sourceId }

@@ -34,6 +34,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -99,6 +100,7 @@ fun HomeScreen(onTab: (Tab) -> Unit, onOpen: (MediaItem) -> Unit, onPlay: (Media
     val progress by container.progress.all.collectAsState()
     var backdrop by remember { mutableStateOf<String?>(null) }
     val tv = LocalIsTv.current
+    val scope = rememberCoroutineScope()
 
     TopLevelScaffold(Tab.HOME, backdrop, onTab) {
         when (val s = state) {
@@ -111,7 +113,16 @@ fun HomeScreen(onTab: (Tab) -> Unit, onOpen: (MediaItem) -> Unit, onPlay: (Media
                         "Welcome to Prism",
                         "Add a Jellyfin or Plex server, a network share or a WebDAV folder to start building your library.",
                         "Add a source",
-                    ) { onTab(Tab.SETTINGS) }
+                        onAction = { onTab(Tab.SETTINGS) },
+                        secondaryAction = "Try the demo",
+                        onSecondaryAction = {
+                            scope.launch {
+                                container.settings.update { s2 ->
+                                    if (s2.sources.any { it.id == "demo" }) s2 else s2.copy(sources = s2.sources + demoSource())
+                                }
+                            }
+                        },
+                    )
                 } else if (data.shelves.isEmpty() && data.hero.isEmpty()) {
                     MessageState(
                         "Nothing here yet",

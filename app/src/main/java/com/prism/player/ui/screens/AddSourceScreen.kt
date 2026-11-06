@@ -68,7 +68,7 @@ fun AddSourceScreen(type: SourceType, onDone: () -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
 
     fun save(cfg: SourceConfig) = scope.launch {
-        container.settings.update { it.copy(sources = it.sources + cfg) }
+        container.settings.update { it.copy(sources = it.sources.filterNot { s -> s.id == cfg.id } + cfg) }
         onDone()
     }
 
@@ -117,6 +117,16 @@ fun AddSourceScreen(type: SourceType, onDone: () -> Unit) {
                             )
                             SmbSource(cfg, container.appContext, container.tmdb).list("")
                             cfg
+                        }
+                    }
+                    SourceType.DEMO -> {
+                        Text(
+                            "Adds a small library of open-licensed Blender films and sample clips streamed from the internet, " +
+                                "so you can try Prism without a server.",
+                            color = Palette.TextSecondary,
+                        )
+                        GlassButton("Add demo library", primary = true) {
+                            attempt { demoSource() }
                         }
                     }
                     SourceType.WEBDAV -> WebDavForm(busy) { name, url, user, pass ->
@@ -305,3 +315,10 @@ private fun WebDavForm(busy: Boolean, onSubmit: (String, String, String, String)
     Field("Password", pass, { pass = it }, password = true)
     GlassButton("Connect", primary = true) { if (!busy && url.isNotBlank()) onSubmit(name, url, user, pass) }
 }
+
+fun demoSource() = SourceConfig(
+    id = "demo",
+    type = SourceType.DEMO,
+    name = "Demo library",
+    url = "Blender open movies · sample clips",
+)

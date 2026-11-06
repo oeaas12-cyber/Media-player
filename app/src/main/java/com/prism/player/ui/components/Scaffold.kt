@@ -135,7 +135,14 @@ fun LoadingState(message: String = "Loading your library…") {
 }
 
 @Composable
-fun MessageState(title: String, message: String, action: String? = null, onAction: () -> Unit = {}) {
+fun MessageState(
+    title: String,
+    message: String,
+    action: String? = null,
+    onAction: () -> Unit = {},
+    secondaryAction: String? = null,
+    onSecondaryAction: () -> Unit = {},
+) {
     Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
         Column(
             Modifier.glass().padding(32.dp),
@@ -151,7 +158,10 @@ fun MessageState(title: String, message: String, action: String? = null, onActio
             Text(message, color = Palette.TextSecondary, textAlign = TextAlign.Center)
             if (action != null) {
                 Spacer(Modifier.height(20.dp))
-                GlassButton(action, primary = true, onClick = onAction)
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    GlassButton(action, primary = true, onClick = onAction)
+                    if (secondaryAction != null) GlassButton(secondaryAction, onClick = onSecondaryAction)
+                }
             }
         }
     }

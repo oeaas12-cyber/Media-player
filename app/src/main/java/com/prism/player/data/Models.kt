@@ -75,6 +75,7 @@ enum class SourceType(val label: String) {
     PLEX("Plex"),
     SMB("Network share (SMB)"),
     WEBDAV("WebDAV"),
+    DEMO("Demo library"),
 }
 
 @Serializable

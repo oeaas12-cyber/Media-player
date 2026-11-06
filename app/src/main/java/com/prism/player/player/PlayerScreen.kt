@@ -132,7 +132,7 @@ import androidx.media3.common.MediaItem as ExoMediaItem
 
 private class Loaded(val item: MediaItem, val playback: Playback, val prefs: PlayerPrefs, val startMs: Long)
 
-private enum class Panel(val title: String) { AUDIO("Audio"), SUBTITLES("Subtitles"), SPEED("Playback speed"), ASPECT("Picture") }
+internal enum class Panel(val title: String) { AUDIO("Audio"), SUBTITLES("Subtitles"), SPEED("Playback speed"), ASPECT("Picture") }
 
 @Composable
 fun PlayerScreen(itemId: String, startMs: Long, onBack: () -> Unit, onPlayNext: (MediaItem) -> Unit) {
@@ -447,7 +447,7 @@ private fun PlayerContent(data: Loaded, onBack: () -> Unit, onPlayNext: (MediaIt
 }
 
 @Composable
-private fun Controls(
+internal fun Controls(
     item: MediaItem,
     isPlaying: Boolean,
     position: Long,
@@ -622,7 +622,7 @@ private fun SeekBar(
 }
 
 @Composable
-private fun OptionPanel(
+internal fun OptionPanel(
     title: String,
     options: List<Pair<String, Boolean>>,
     onPick: (Int) -> Unit,
