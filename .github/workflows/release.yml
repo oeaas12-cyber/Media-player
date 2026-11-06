@@ -28,7 +28,7 @@ jobs:
           KEYSTORE_BASE64: ${{ secrets.PRISM_KEYSTORE_BASE64 }}
         run: |
           if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "::error::Add the PRISM_KEYSTORE_BASE64 and PRISM_KEYSTORE_PASSWORD repository secrets first. Releases must always be signed with the same key, or in-app updates can't install."
+            echo "::error::Add the PRISM_KEYSTORE_BASE64 repository secret first. Releases must always be signed with the same key, or in-app updates can't install."
             exit 1
           fi
           echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
@@ -41,6 +41,8 @@ jobs:
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           export PRISM_VERSION="$VERSION"
           export PRISM_KEY_ALIAS="prism"
+          # The keystore itself is the secret; its password only needs a secret if you set one.
+          export PRISM_KEYSTORE_PASSWORD="${PRISM_KEYSTORE_PASSWORD:-prism-release-key}"
           export PRISM_KEY_PASSWORD="$PRISM_KEYSTORE_PASSWORD"
           chmod +x gradlew
           ./gradlew assembleRelease --stacktrace

@@ -93,5 +93,5 @@ To publish a version, run **Actions → Release → Run workflow** and enter a v
 The version number must be higher than the previous one.
 
 Releases are signed with one permanent key, which Android requires before it will install an update over an existing app.
-The key is stored in two repository secrets, `PRISM_KEYSTORE_BASE64` and `PRISM_KEYSTORE_PASSWORD`.
-The release workflow refuses to run without them, so a release can never be signed with the wrong key.
+The key is stored in the repository secret `PRISM_KEYSTORE_BASE64`. You can also set `PRISM_KEYSTORE_PASSWORD` if the key uses a different password.
+The release workflow refuses to run without the key, so a release can never be signed with the wrong key.
