@@ -189,24 +189,15 @@ class JellyfinSource(override val config: SourceConfig, private val deviceId: St
         suspend fun login(url: String, username: String, password: String, deviceId: String): SourceConfig {
             val root = normaliseUrl(url).removeSuffix("/emby")
             val bases = listOf("" to root, "/emby" to "$root/emby")
-            // Ask the server what it is (public page, not a sign-in attempt) and send only the
-            // headers that product expects; Emby's own web app sends no Authorization header.
-            val product = bases.firstNotNullOfOrNull { (_, b) ->
-                runCatching { Net.getJson("$b/System/Info/Public").obj()?.s("ProductName") }.getOrNull()
-            }
-            val isJellyfin = product?.contains("Jellyfin", ignoreCase = true) == true
-            val styles = listOf(
-                if (isJellyfin) "Jellyfin" to authHeaders(deviceId, null)
-                else "Emby" to embyHeaders(deviceId)
-            )
-            // Form body first: it's what Emby's own web app sends. JSON only if the server
-            // doesn't understand the form (never after a rejected password).
-            val pwForm = FormBody.Builder().add("Username", username).add("Pw", password).build()
+            // Emby and Jellyfin both expect the "MediaBrowser" authorization scheme (the historical
+            // name both forks share). authHeaders() builds exactly that; sending an "Emby ..." scheme
+            // makes Emby fail to parse the header and answer 401, which looked like a wrong password.
+            val styles = listOf("standard" to authHeaders(deviceId, null))
+            // JSON body {Username, Pw} is what Emby's web helper sends; form is a fallback.
             val pwJson = buildJsonObject { put("Username", username); put("Pw", password) }.toString()
                 .toRequestBody("application/json".toMediaType())
-            val bodies = listOf("form" to pwForm, "JSON" to pwJson)
-            val query = "?X-Emby-Client=${Uri.encode(CLIENT)}&X-Emby-Device-Name=Android" +
-                "&X-Emby-Device-Id=${Uri.encode(deviceId)}&X-Emby-Client-Version=$VERSION"
+            val pwForm = FormBody.Builder().add("Username", username).add("Pw", password).build()
+            val bodies = listOf("JSON" to pwJson, "form" to pwForm)
 
             val attempts = mutableListOf<String>()
             for ((suffix, base) in bases) {
@@ -218,7 +209,7 @@ class JellyfinSource(override val config: SourceConfig, private val deviceId: St
                         val res = try {
                             Net.json.parseToJsonElement(
                                 Net.send(
-                                    Request.Builder().url("$base/Users/AuthenticateByName$query")
+                                    Request.Builder().url("$base/Users/AuthenticateByName")
                                         .post(body)
                                         .header("Accept", "application/json")
                                         .header("User-Agent", "$CLIENT/$VERSION (Android)")
