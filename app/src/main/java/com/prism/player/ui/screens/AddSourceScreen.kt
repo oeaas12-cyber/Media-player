@@ -197,7 +197,25 @@ private fun JellyfinForm(busy: Boolean, onSubmit: (String, String, String) -> Un
     Field("Server address", url, { url = it }, hint = "http://192.168.1.10:8096", keyboard = KeyboardType.Uri)
     Field("Username", user, { user = it })
     Field("Password", pass, { pass = it }, password = true)
+    val warnings = credentialWarnings("username", user) + credentialWarnings("password", pass)
+    warnings.forEach { Text("⚠ $it", color = Palette.Danger) }
     GlassButton("Sign in", primary = true) { if (!busy && url.isNotBlank() && user.isNotBlank()) onSubmit(url.trim(), user.trim(), pass) }
+}
+
+/**
+ * Spots keyboard surprises that make a password look right but differ from what other
+ * apps send: Arabic/Persian digits, spaces at the ends, and other non-Latin characters.
+ * Never shows the characters themselves.
+ */
+private fun credentialWarnings(field: String, value: String): List<String> = buildList {
+    if (value.isEmpty()) return@buildList
+    if (value.any { it in '\u0660'..'\u0669' || it in '\u06F0'..'\u06F9' }) {
+        add("The $field contains Arabic digits (٠١٢…). Switch the keyboard to English digits (0 1 2…).")
+    }
+    if (value != value.trim()) add("The $field starts or ends with a space.")
+    if (value.any { it.code > 127 && it !in '\u0660'..'\u0669' && it !in '\u06F0'..'\u06F9' }) {
+        add("The $field contains non-English characters. Check that the keyboard language is right.")
+    }
 }
 
 @Composable
