@@ -36,7 +36,9 @@ import com.prism.player.data.PlayerPrefs
 import com.prism.player.data.SourceConfig
 import com.prism.player.data.SourceType
 import com.prism.player.ui.appContainer
+import com.prism.player.ui.components.Avatar
 import com.prism.player.ui.components.GlassButton
+import com.prism.player.ui.components.LocalOpenProfiles
 import com.prism.player.ui.components.GlassChip
 import com.prism.player.ui.components.GlassIconButton
 import com.prism.player.ui.components.Tab
@@ -49,7 +51,7 @@ import com.prism.player.update.UpdateManager
 import kotlinx.coroutines.launch
 
 @Composable
-fun SettingsScreen(onTab: (Tab) -> Unit, onAddSource: (SourceType) -> Unit) {
+fun SettingsScreen(onTab: (Tab) -> Unit, onAddSource: (SourceType) -> Unit, onEditProfile: (String) -> Unit = {}) {
     val container = appContainer()
     val settings by container.settings.settings.collectAsState(initial = AppSettings())
     val scope = rememberCoroutineScope()
@@ -65,6 +67,31 @@ fun SettingsScreen(onTab: (Tab) -> Unit, onAddSource: (SourceType) -> Unit) {
             verticalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
+            item { SectionTitle("Profiles") }
+            item {
+                val openProfiles = LocalOpenProfiles.current
+                Column(Modifier.glass().padding(16.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        "Each profile has its own Continue Watching and watched history. Kids profiles only show family titles.",
+                        color = Palette.TextSecondary,
+                    )
+                    settings.profiles.forEach { p ->
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Avatar(p.name, p.avatar, 40.dp)
+                            Column(Modifier.weight(1f)) {
+                                Text(p.name + if (p.id == settings.activeProfileId) "  ·  current" else "", color = Palette.TextPrimary)
+                                if (p.isKids) Text("Kids", color = Palette.Accent, style = MaterialTheme.typography.labelMedium)
+                            }
+                            GlassButton("Edit") { onEditProfile(p.id) }
+                        }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        GlassButton("Add profile", Icons.Filled.Add) { onEditProfile("new") }
+                        if (settings.profiles.size > 1) GlassButton("Switch profile", onClick = openProfiles)
+                    }
+                }
+            }
+
             item { SectionTitle("Sources") }
             if (settings.sources.isEmpty()) {
                 item { Text("No sources yet. Add one below.", color = Palette.TextSecondary) }

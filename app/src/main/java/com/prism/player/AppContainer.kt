@@ -16,4 +16,14 @@ class AppContainer(context: Context) {
     val progress = ProgressStore(context)
     val tmdb = Tmdb { settings.current().tmdbKey }
     val library = LibraryRepository(context, settings, tmdb, progress)
+
+    /** True once a profile was chosen (or auto-chosen) in this process; stops re-asking on every screen. */
+    @Volatile var profileChosenThisLaunch = false
+
+    /** Makes [id] the active profile and loads its watch history. */
+    suspend fun switchProfile(id: String) {
+        settings.setActiveProfile(id)
+        progress.switchProfile(id)
+        profileChosenThisLaunch = true
+    }
 }

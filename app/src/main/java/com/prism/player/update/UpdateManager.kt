@@ -1,16 +1,16 @@
 package com.prism.player.update
 
-import android.app.PendingIntent
+import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
-import android.content.pm.PackageInstaller
 import android.net.Uri
-import android.os.Build
 import android.provider.Settings
+import androidx.core.content.FileProvider
 import com.prism.player.BuildConfig
 import com.prism.player.data.Net
-import com.prism.player.data.l
 import com.prism.player.data.arr
+import com.prism.player.data.l
 import com.prism.player.data.obj
 import com.prism.player.data.s
 import kotlinx.coroutines.Dispatchers
@@ -22,8 +22,10 @@ import java.io.File
 import java.io.IOException
 
 /**
- * Checks GitHub Releases for a newer APK, downloads it and hands it to the system
- * installer. Updates only install when the new APK is signed with the same key.
+ * Checks GitHub Releases for a newer APK, downloads it, then hands it to Android's own
+ * installer from the foreground. (Launching the installer from a background receiver is
+ * silently blocked on Android 10+, which made earlier updates look successful while nothing
+ * installed.) Updates only install when the APK is signed with the same key.
  */
 object UpdateManager {
     data class ReleaseInfo(val version: String, val code: Int, val notes: String, val apkUrl: String, val size: Long)
@@ -34,7 +36,8 @@ object UpdateManager {
         data object UpToDate : State
         data class Available(val info: ReleaseInfo) : State
         data class Downloading(val info: ReleaseInfo, val progress: Float) : State
-        data class Installing(val info: ReleaseInfo) : State
+        /** The APK is downloaded and Android's installer has been opened. */
+        data class Installing(val info: ReleaseInfo, val file: File) : State
         data class Failed(val message: String, val info: ReleaseInfo?) : State
     }
 
@@ -53,7 +56,7 @@ object UpdateManager {
     suspend fun check(force: Boolean = false) {
         val now = System.currentTimeMillis()
         if (!force && now - lastCheck < 6 * 60 * 60 * 1000L) return
-        if (_state.value is State.Downloading || _state.value is State.Installing) return
+        if (_state.value is State.Downloading) return
         lastCheck = now
         _state.value = State.Checking
         _state.value = runCatching {
@@ -76,27 +79,44 @@ object UpdateManager {
         }.getOrElse { State.Failed("Couldn't check for updates: ${it.message}", null) }
     }
 
+    /** Downloads the APK (with progress) and opens Android's installer for it. */
     suspend fun downloadAndInstall(context: Context, info: ReleaseInfo) {
         val app = context.applicationContext
         if (!app.packageManager.canRequestPackageInstalls()) {
             val opened = runCatching {
-                app.startActivity(
+                context.startActivity(
                     Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${app.packageName}"))
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 )
             }.isSuccess
             if (opened) {
-                _state.value = State.Failed("Allow Prism Player to install apps, then press Update again.", info)
+                _state.value = State.Failed("Allow Prism Player to install apps on that screen, then come back and press Update again.", info)
                 return
             }
             // Some TVs have no such settings screen; the installer will ask instead.
         }
         try {
             val file = download(app, info)
-            _state.value = State.Installing(info)
-            install(app, file)
+            _state.value = State.Installing(info, file)
+            openInstaller(context, file)
         } catch (e: Exception) {
             _state.value = State.Failed("Update failed: ${e.message ?: e.javaClass.simpleName}", info)
+        }
+    }
+
+    /** Re-opens the installer for an already-downloaded APK (if the user dismissed it). */
+    fun openInstaller(context: Context, file: File) {
+        val app = context.applicationContext
+        val uri = FileProvider.getUriForFile(app, "${app.packageName}.fileprovider", file)
+        val intent = Intent(Intent.ACTION_VIEW)
+            .setDataAndType(uri, "application/vnd.android.package-archive")
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            .putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
+        val activity = context.findActivity()
+        if (activity != null) {
+            activity.startActivity(intent)
+        } else {
+            app.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }
     }
 
@@ -133,41 +153,12 @@ object UpdateManager {
         file
     }
 
-    private suspend fun install(context: Context, file: File) = withContext(Dispatchers.IO) {
-        val installer = context.packageManager.packageInstaller
-        val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
-            setAppPackageName(context.packageName)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
-            }
+    private fun Context.findActivity(): Activity? {
+        var c: Context? = this
+        while (c is ContextWrapper) {
+            if (c is Activity) return c
+            c = c.baseContext
         }
-        val sessionId = installer.createSession(params)
-        installer.openSession(sessionId).use { session ->
-            session.openWrite("base.apk", 0, file.length()).use { out ->
-                file.inputStream().use { it.copyTo(out) }
-                session.fsync(out)
-            }
-            val flags = PendingIntent.FLAG_UPDATE_CURRENT or
-                (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0)
-            val callback = PendingIntent.getBroadcast(
-                context, sessionId, Intent(context, InstallReceiver::class.java).setPackage(context.packageName), flags,
-            )
-            session.commit(callback.intentSender)
-        }
-    }
-
-    internal fun onInstallResult(status: Int, message: String?) {
-        val info = (_state.value as? State.Installing)?.info
-        _state.value = when (status) {
-            PackageInstaller.STATUS_SUCCESS -> State.Idle
-            PackageInstaller.STATUS_FAILURE_ABORTED -> State.Failed("Update cancelled.", info)
-            PackageInstaller.STATUS_FAILURE_CONFLICT, PackageInstaller.STATUS_FAILURE_INCOMPATIBLE ->
-                State.Failed(
-                    "This version can't be updated in place because it was signed with a different key. " +
-                        "Uninstall Prism Player once, then install the new version from the Releases page. Updates after that work from inside the app.",
-                    info,
-                )
-            else -> State.Failed("Update failed: ${message ?: "status $status"}", info)
-        }
+        return null
     }
 }

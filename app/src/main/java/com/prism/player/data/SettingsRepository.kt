@@ -32,4 +32,31 @@ class SettingsRepository(private val context: Context) {
     }
 
     suspend fun ensureDeviceId() = update { it }
+
+    /** Guarantees at least one profile exists (first run / upgrade from a version without profiles). */
+    suspend fun ensureProfile() = update { s ->
+        if (s.profiles.isNotEmpty()) s
+        else {
+            val me = Profile(id = "default", name = "Me", avatar = 0, createdAt = System.currentTimeMillis())
+            s.copy(profiles = listOf(me), activeProfileId = me.id)
+        }
+    }
+
+    suspend fun addProfile(name: String, avatar: Int, isKids: Boolean): Profile {
+        val p = Profile(UUID.randomUUID().toString(), name.trim().ifBlank { "Profile" }, avatar, isKids, System.currentTimeMillis())
+        update { it.copy(profiles = it.profiles + p) }
+        return p
+    }
+
+    suspend fun updateProfile(p: Profile) = update { s -> s.copy(profiles = s.profiles.map { if (it.id == p.id) p else it }) }
+
+    suspend fun removeProfile(id: String) = update { s ->
+        val remaining = s.profiles.filterNot { it.id == id }
+        s.copy(
+            profiles = remaining,
+            activeProfileId = if (s.activeProfileId == id) remaining.firstOrNull()?.id.orEmpty() else s.activeProfileId,
+        )
+    }
+
+    suspend fun setActiveProfile(id: String) = update { it.copy(activeProfileId = id) }
 }

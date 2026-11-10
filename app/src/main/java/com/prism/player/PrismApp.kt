@@ -15,7 +15,9 @@ class PrismApp : Application(), ImageLoaderFactory {
         container = AppContainer(this)
         container.appScope.launch {
             container.settings.ensureDeviceId()
-            container.progress.load()
+            container.settings.ensureProfile()
+            val active = container.settings.current().activeProfile?.id ?: "default"
+            container.progress.switchProfile(active)
         }
     }
 

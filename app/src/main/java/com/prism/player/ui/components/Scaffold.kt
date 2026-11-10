@@ -29,6 +29,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.staticCompositionLocalOf
+import com.prism.player.data.AppSettings
+import com.prism.player.ui.appContainer
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -41,6 +45,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.prism.player.ui.theme.LocalIsTv
 import com.prism.player.ui.theme.Palette
+
+/** Opens the "Who's watching?" screen; provided by AppNavigation. */
+val LocalOpenProfiles = staticCompositionLocalOf<() -> Unit> { {} }
 
 enum class Tab(val label: String, val icon: ImageVector, val route: String) {
     HOME("Home", Icons.Filled.Home, "home"),
@@ -85,6 +92,36 @@ fun GlassTabBar(selected: Tab, onTab: (Tab) -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Tab.entries.forEach { tab -> TabPill(tab, tab == selected, showLabel = tv || tab == selected) { onTab(tab) } }
+            ProfilePill()
+        }
+    }
+}
+
+/** Current profile's avatar at the end of the tab bar; tap to switch profiles. */
+@Composable
+private fun ProfilePill() {
+    val settings by appContainer().settings.settings.collectAsState(initial = AppSettings())
+    val profile = settings.activeProfile ?: return
+    val open = LocalOpenProfiles.current
+    val tv = LocalIsTv.current
+    val interaction = remember { MutableInteractionSource() }
+    val focused by interaction.collectIsFocusedAsState()
+    Row(
+        Modifier
+            .glassClickable(interaction, focusScale = 1.06f, onClick = open)
+            .clip(RoundedCornerShape(50))
+            .background(if (focused) Color.White else Color.Transparent)
+            .padding(start = 6.dp, end = if (tv) 14.dp else 6.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Avatar(profile.name, profile.avatar, 30.dp, focused = focused)
+        if (tv) {
+            Spacer(Modifier.width(8.dp))
+            Text(
+                profile.name, maxLines = 1,
+                color = if (focused) Color(0xFF0B1020) else Palette.TextSecondary,
+                style = MaterialTheme.typography.labelLarge,
+            )
         }
     }
 }

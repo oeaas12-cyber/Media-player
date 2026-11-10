@@ -54,14 +54,23 @@ class LibraryRepository(
 
     private fun remember(items: List<MediaItem>) = items.also { list -> list.forEach { cache[it.id] = it } }
 
+    private val kidsGenres = setOf("family", "animation", "kids", "children", "cartoon")
+
+    /** Kids profiles only see family-friendly titles (genre must be known and family-safe). */
+    private suspend fun forProfile(items: List<MediaItem>): List<MediaItem> {
+        val kids = settings.current().activeProfile?.isKids == true
+        if (!kids) return items
+        return items.filter { it.genres.any { g -> g.lowercase() in kidsGenres } }
+    }
+
     private suspend fun <T> fromAll(block: suspend (MediaSource) -> List<T>): Pair<List<T>, List<String>> = coroutineScope {
         val results = sources().map { src -> async { src to runCatching { block(src) } } }.awaitAll()
         results.flatMap { it.second.getOrDefault(emptyList()) } to
             results.mapNotNull { (src, r) -> r.exceptionOrNull()?.let { "${src.config.name}: ${it.message ?: it.javaClass.simpleName}" } }
     }
 
-    suspend fun movies(): List<MediaItem> = remember(fromAll { it.movies() }.first).sortedBy { it.title.lowercase() }
-    suspend fun shows(): List<MediaItem> = remember(fromAll { it.shows() }.first).sortedBy { it.title.lowercase() }
+    suspend fun movies(): List<MediaItem> = forProfile(remember(fromAll { it.movies() }.first)).sortedBy { it.title.lowercase() }
+    suspend fun shows(): List<MediaItem> = forProfile(remember(fromAll { it.shows() }.first)).sortedBy { it.title.lowercase() }
 
     suspend fun children(item: MediaItem): List<MediaItem> = remember(sourceOf(item).children(item))
 
@@ -109,10 +118,13 @@ class LibraryRepository(
         val moviesD = async { fromAll { it.movies() } }
         val showsD = async { fromAll { it.shows() } }
         val resumeD = async { fromAll { it.continueWatching() } }
-        val (movies, e1) = moviesD.await()
-        val (shows, e2) = showsD.await()
-        val (serverResume, _) = resumeD.await()
-        remember(movies); remember(shows); remember(serverResume)
+        val (allMovies, e1) = moviesD.await()
+        val (allShows, e2) = showsD.await()
+        val (allResume, _) = resumeD.await()
+        remember(allMovies); remember(allShows); remember(allResume)
+        val movies = forProfile(allMovies)
+        val shows = forProfile(allShows)
+        val serverResume = forProfile(allResume)
 
         val local = progress.continueWatching().map { it.item }
         val continueWatching = (local + serverResume.filter { progress.get(it.id)?.finished != true })

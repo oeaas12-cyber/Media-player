@@ -37,13 +37,16 @@ fun UpdateCard(modifier: Modifier = Modifier, showUpToDate: Boolean = false, onD
     val context = LocalContext.current
     val scope = appContainer().appScope
     fun start(info: UpdateManager.ReleaseInfo) = scope.launch { UpdateManager.downloadAndInstall(context, info) }
+    val installed = UpdateManager.currentVersion
 
     val content: (@Composable () -> Unit)? = when (val s = state) {
         is UpdateManager.State.Available -> {
             {
-                Title("Version ${s.info.version} is available")
+                Title("Update available: ${s.info.version}")
+                Text("Installed: $installed  →  New: ${s.info.version}", color = Palette.TextSecondary)
                 if (s.info.notes.isNotBlank()) {
-                    Text(s.info.notes, color = Palette.TextSecondary, maxLines = 4, overflow = TextOverflow.Ellipsis)
+                    Spacer(Modifier.height(6.dp))
+                    Text(s.info.notes, color = Palette.TextTertiary, maxLines = 4, overflow = TextOverflow.Ellipsis)
                 }
                 Spacer(Modifier.height(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -54,13 +57,24 @@ fun UpdateCard(modifier: Modifier = Modifier, showUpToDate: Boolean = false, onD
         }
         is UpdateManager.State.Downloading -> {
             {
-                Title("Downloading version ${s.info.version}… ${(s.progress * 100).toInt()}%")
+                Title("Downloading ${s.info.version}… ${(s.progress * 100).toInt()}%")
                 Spacer(Modifier.height(10.dp))
                 Bar(s.progress)
             }
         }
         is UpdateManager.State.Installing -> {
-            { Title("Installing version ${s.info.version}…"); Text("Confirm the installation when Android asks.", color = Palette.TextSecondary) }
+            {
+                Title("Ready to install ${s.info.version}")
+                Text(
+                    "Android's installer should be open now. Tap Install there. " +
+                        "If you closed it, open it again below.",
+                    color = Palette.TextSecondary,
+                )
+                Spacer(Modifier.height(10.dp))
+                GlassButton("Open installer again", Icons.Filled.SystemUpdate, primary = true) {
+                    UpdateManager.openInstaller(context, s.file)
+                }
+            }
         }
         is UpdateManager.State.Failed -> {
             {
@@ -72,7 +86,7 @@ fun UpdateCard(modifier: Modifier = Modifier, showUpToDate: Boolean = false, onD
             }
         }
         UpdateManager.State.Checking -> if (showUpToDate) ({ Text("Checking for updates…", color = Palette.TextSecondary) }) else null
-        UpdateManager.State.UpToDate -> if (showUpToDate) ({ Text("You're on the latest version.", color = Palette.TextSecondary) }) else null
+        UpdateManager.State.UpToDate -> if (showUpToDate) ({ Text("You're on the latest version ($installed).", color = Palette.TextSecondary) }) else null
         UpdateManager.State.Idle -> null
     }
     if (content != null) {

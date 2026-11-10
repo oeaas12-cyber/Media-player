@@ -25,12 +25,14 @@ import coil.ImageLoader
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.prism.player.data.MediaItem
 import com.prism.player.data.MediaKind
+import com.prism.player.data.Profile
 import com.prism.player.player.Controls
 import com.prism.player.player.OptionPanel
 import com.prism.player.ui.components.Tab
 import com.prism.player.ui.screens.DetailScreen
 import com.prism.player.ui.screens.HomeScreen
 import com.prism.player.ui.screens.LibraryScreen
+import com.prism.player.ui.screens.ProfilePickerScreen
 import com.prism.player.ui.screens.SettingsScreen
 import com.prism.player.ui.screens.demoSource
 import com.prism.player.ui.theme.LocalIsTv
@@ -69,7 +71,15 @@ abstract class ScreenshotBase(private val tv: Boolean, private val prefix: Strin
 
     private fun seed() = runBlocking {
         val c = app.container
-        c.settings.update { it.copy(sources = listOf(demoSource())) }
+        c.settings.update {
+            it.copy(
+                sources = listOf(demoSource()),
+                profiles = listOf(
+                    Profile("default", "Me", 0), Profile("kids", "Sara", 2, isKids = true), Profile("p3", "Omar", 4),
+                ),
+                activeProfileId = "default",
+            )
+        }
         val sintel = c.library.item("demo|movie:sintel")!!
         c.progress.save(sintel, 6 * 60_000L, 15 * 60_000L)
         val ep1 = c.library.item("demo|episode:showcase:1")!!
@@ -87,6 +97,7 @@ abstract class ScreenshotBase(private val tv: Boolean, private val prefix: Strin
             PrismTheme { CompositionLocalProvider(LocalIsTv provides tv) { screen() } }
         }
 
+        shot("profiles") { ProfilePickerScreen(onChosen = {}, onEdit = {}) }
         shot("home") { HomeScreen(onTab = {}, onOpen = {}, onPlay = {}) }
         shot("movies") { LibraryScreen(MediaKind.MOVIE, onTab = {}, onOpen = {}) }
         shot("movie-detail") { DetailScreen("demo|movie:sintel", onBack = {}, onOpen = {}, onPlay = { _, _ -> }) }

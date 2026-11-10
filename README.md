@@ -12,9 +12,11 @@ They're refreshed on every push.
 
 **Android TV**
 
-| Home | Movies |
+| Who's watching? | Home |
 |---|---|
-| ![Home](docs/screenshots/tv-home.png) | ![Movies](docs/screenshots/tv-movies.png) |
+| ![Profiles](docs/screenshots/tv-profiles.png) | ![Home](docs/screenshots/tv-home.png) |
+| **Movies** | |
+| ![Movies](docs/screenshots/tv-movies.png) | |
 | **Movie details** | **TV show with episodes** |
 | ![Movie details](docs/screenshots/tv-movie-detail.png) | ![Show details](docs/screenshots/tv-show-detail.png) |
 | **Player controls** | **Subtitle picker** |
@@ -31,6 +33,11 @@ They're refreshed on every push.
 The player screenshots show the controls drawn over a still frame with a sample subtitle list, because unit tests can't decode video.
 
 ## Features
+
+**Profiles**
+- "Who's watching?" picker with up to 8 profiles, each with its own Continue Watching and watched history
+- Kids profiles only show family-friendly titles (Family, Animation, Kids)
+- Switch from the avatar at the end of the tab bar; manage in Settings → Profiles
 
 **Library**
 - Home screen with a rotating hero, plus Continue Watching, Recently Added, Movies, TV Shows, Top Rated and genre shelves

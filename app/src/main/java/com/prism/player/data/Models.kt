@@ -104,10 +104,26 @@ data class PlayerPrefs(
     val autoPlayNext: Boolean = true,
 )
 
+/** A person using this device. Each profile keeps its own watch history and resume points. */
+@Serializable
+data class Profile(
+    val id: String,
+    val name: String,
+    /** Index into the avatar palette (see Avatars). */
+    val avatar: Int = 0,
+    /** Kids profiles only see family-friendly genres. */
+    val isKids: Boolean = false,
+    val createdAt: Long = 0,
+)
+
 @Serializable
 data class AppSettings(
     val sources: List<SourceConfig> = emptyList(),
     val tmdbKey: String = "",
     val player: PlayerPrefs = PlayerPrefs(),
     val deviceId: String = "",
-)
+    val profiles: List<Profile> = emptyList(),
+    val activeProfileId: String = "",
+) {
+    val activeProfile: Profile? get() = profiles.firstOrNull { it.id == activeProfileId } ?: profiles.firstOrNull()
+}
