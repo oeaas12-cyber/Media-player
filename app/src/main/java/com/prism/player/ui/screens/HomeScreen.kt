@@ -39,6 +39,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -203,26 +207,35 @@ private fun Hero(
     Box(Modifier.fillMaxWidth().height(if (tv) 430.dp else 460.dp)) {
         AnimatedContent(item, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "hero") { current ->
             Box(Modifier.fillMaxSize()) {
+                // The artwork and its scrim dissolve to transparent at the bottom, so the hero
+                // melts into the blurred page behind it with no visible edge.
+                val fadeOut = Modifier
+                    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                    .drawWithContent {
+                        drawContent()
+                        drawRect(
+                            Brush.verticalGradient(0.5f to Color.Black, 1f to Color.Transparent),
+                            blendMode = BlendMode.DstIn,
+                        )
+                    }
                 AsyncImage(
                     model = current.backdropUrl,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize().then(fadeOut),
                 )
-                // Fade the artwork into the page at the bottom; darken the top for the bar.
                 Box(
-                    Modifier.fillMaxSize().background(
+                    Modifier.fillMaxSize().then(fadeOut).background(
                         Brush.verticalGradient(
                             0f to Color.Black.copy(alpha = 0.45f),
                             0.3f to Color.Transparent,
-                            0.55f to Palette.Background.copy(alpha = 0.35f),
-                            1f to Palette.Background,
+                            1f to Palette.Background.copy(alpha = 0.75f),
                         )
                     )
                 )
                 if (tv) {
                     Box(
-                        Modifier.fillMaxSize().background(
+                        Modifier.fillMaxSize().then(fadeOut).background(
                             Brush.horizontalGradient(listOf(Palette.Background.copy(alpha = 0.8f), Color.Transparent, Color.Transparent))
                         )
                     )
