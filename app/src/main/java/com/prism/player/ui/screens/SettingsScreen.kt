@@ -63,7 +63,7 @@ fun SettingsScreen(onTab: (Tab) -> Unit, onAddSource: (SourceType) -> Unit, onEd
 
     TopLevelScaffold(Tab.SETTINGS, null, onTab) {
         LazyColumn(
-            contentPadding = PaddingValues(horizontal = if (tv) 96.dp else 16.dp, vertical = 8.dp),
+            contentPadding = PaddingValues(start = if (tv) 96.dp else 16.dp, end = if (tv) 96.dp else 16.dp, top = 8.dp, bottom = 120.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier.fillMaxSize(),
         ) {

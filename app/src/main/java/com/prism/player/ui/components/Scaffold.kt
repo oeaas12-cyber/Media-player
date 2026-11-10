@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -57,39 +58,55 @@ enum class Tab(val label: String, val icon: ImageVector, val route: String) {
     SETTINGS("Settings", Icons.Filled.Settings, "settings"),
 }
 
-/** Top-level screen: blurred artwork backdrop + floating glass tab bar + content. */
+/**
+ * Top-level screen: blurred artwork backdrop, content, and a floating glass tab bar drawn
+ * over it (top on TV, bottom on phones). [fullBleed] lets content run edge to edge under the bar.
+ */
 @Composable
 fun TopLevelScaffold(
     selected: Tab,
     backdrop: String?,
     onTab: (Tab) -> Unit,
+    fullBleed: Boolean = false,
     content: @Composable () -> Unit,
 ) {
+    val tv = LocalIsTv.current
     Box(Modifier.fillMaxSize()) {
         GlassBackdrop(backdrop)
-        Column(Modifier.fillMaxSize()) {
-            GlassTabBar(selected, onTab)
-            Box(Modifier.fillMaxSize()) { content() }
-        }
+        Box(
+            Modifier.fillMaxSize().then(
+                when {
+                    fullBleed -> Modifier
+                    tv -> Modifier.padding(top = 96.dp)
+                    else -> Modifier.statusBarsPadding().padding(top = 8.dp)
+                }
+            )
+        ) { content() }
+        GlassTabBar(selected, onTab, Modifier.align(if (tv) Alignment.TopCenter else Alignment.BottomCenter))
     }
 }
 
 @Composable
-fun GlassTabBar(selected: Tab, onTab: (Tab) -> Unit) {
+fun GlassTabBar(selected: Tab, onTab: (Tab) -> Unit, modifier: Modifier = Modifier) {
     val tv = LocalIsTv.current
     Row(
-        Modifier
+        modifier
             .fillMaxWidth()
-            .statusBarsPadding()
-            .padding(top = if (tv) 24.dp else 10.dp, bottom = 8.dp, start = 16.dp, end = 16.dp),
+            .then(
+                if (tv) Modifier.statusBarsPadding().padding(top = 24.dp, bottom = 8.dp)
+                else Modifier.navigationBarsPadding().padding(bottom = 14.dp)
+            )
+            .padding(horizontal = 16.dp),
         horizontalArrangement = Arrangement.Center,
     ) {
         Row(
             Modifier
-                .glass(RoundedCornerShape(50))
+                .glass(RoundedCornerShape(50), strength = 1.3f)
+                .background(Color(0xFF0B0E18).copy(alpha = 0.55f))
                 .horizontalScroll(rememberScrollState())
                 .padding(5.dp),
             horizontalArrangement = Arrangement.spacedBy(2.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Tab.entries.forEach { tab -> TabPill(tab, tab == selected, showLabel = tv || tab == selected) { onTab(tab) } }
             ProfilePill()

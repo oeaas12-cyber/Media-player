@@ -42,6 +42,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -64,6 +66,7 @@ import com.prism.player.ui.components.glass
 import com.prism.player.ui.theme.LocalIsTv
 import com.prism.player.ui.theme.Palette
 import com.prism.player.update.UpdateCard
+import com.prism.player.update.UpdateManager
 import androidx.compose.runtime.saveable.rememberSaveable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
@@ -104,8 +107,9 @@ fun HomeScreen(onTab: (Tab) -> Unit, onOpen: (MediaItem) -> Unit, onPlay: (Media
     val tv = LocalIsTv.current
     val scope = rememberCoroutineScope()
     var updateDismissed by rememberSaveable { mutableStateOf(false) }
+    val updateState by UpdateManager.state.collectAsState()
 
-    TopLevelScaffold(Tab.HOME, backdrop, onTab) {
+    TopLevelScaffold(Tab.HOME, backdrop, onTab, fullBleed = true) {
         when (val s = state) {
             UiState.Loading -> LoadingState()
             is UiState.Error -> MessageState("Couldn't load", s.message, "Try again") { vm.load() }
@@ -135,20 +139,24 @@ fun HomeScreen(onTab: (Tab) -> Unit, onOpen: (MediaItem) -> Unit, onPlay: (Media
                 } else {
                     LaunchedEffect(data.hero) { if (backdrop == null) backdrop = data.hero.firstOrNull()?.backdropUrl }
                     LazyColumn(
-                        contentPadding = PaddingValues(bottom = 48.dp),
+                        contentPadding = PaddingValues(bottom = 120.dp),
                         verticalArrangement = Arrangement.spacedBy(if (tv) 28.dp else 20.dp),
                     ) {
-                        if (!updateDismissed) {
+                        if (data.hero.isNotEmpty()) {
+                            item(key = "hero") {
+                                Hero(data.hero, onPlay = onPlay, onOpen = onOpen, onShown = { backdrop = it.backdropUrl })
+                            }
+                        } else {
+                            item(key = "top-space") { Spacer(Modifier.height(if (tv) 96.dp else 48.dp)) }
+                        }
+                        if (!updateDismissed && updateState !is UpdateManager.State.Idle &&
+                            updateState !is UpdateManager.State.Checking && updateState !is UpdateManager.State.UpToDate
+                        ) {
                             item(key = "update") {
                                 UpdateCard(
                                     Modifier.padding(horizontal = if (tv) 48.dp else 16.dp),
                                     onDismiss = { updateDismissed = true },
                                 )
-                            }
-                        }
-                        if (data.hero.isNotEmpty()) {
-                            item(key = "hero") {
-                                Hero(data.hero, onPlay = onPlay, onOpen = onOpen, onShown = { backdrop = it.backdropUrl })
                             }
                         }
                         items(data.shelves, key = { it.title }) { shelf ->
@@ -174,6 +182,7 @@ fun HomeScreen(onTab: (Tab) -> Unit, onOpen: (MediaItem) -> Unit, onPlay: (Media
     }
 }
 
+/** Edge-to-edge artwork that fades into the page, with the title and actions over it. */
 @Composable
 private fun Hero(
     items: List<MediaItem>,
@@ -191,33 +200,39 @@ private fun Hero(
     }
     val item = items[index % items.size]
     LaunchedEffect(item) { onShown(item) }
-    val shape = RoundedCornerShape(28.dp)
-    Box(
-        Modifier
-            .padding(horizontal = if (tv) 48.dp else 16.dp)
-            .fillMaxWidth()
-            .height(if (tv) 300.dp else 230.dp)
-            .glass(shape)
-    ) {
+    Box(Modifier.fillMaxWidth().height(if (tv) 430.dp else 460.dp)) {
         AnimatedContent(item, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "hero") { current ->
             Box(Modifier.fillMaxSize()) {
                 AsyncImage(
                     model = current.backdropUrl,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize().clip(shape),
+                    modifier = Modifier.fillMaxSize(),
                 )
+                // Fade the artwork into the page at the bottom; darken the top for the bar.
                 Box(
                     Modifier.fillMaxSize().background(
-                        Brush.horizontalGradient(listOf(Color.Black.copy(alpha = 0.85f), Color.Black.copy(alpha = 0.35f), Color.Transparent))
+                        Brush.verticalGradient(
+                            0f to Color.Black.copy(alpha = 0.45f),
+                            0.3f to Color.Transparent,
+                            0.55f to Palette.Background.copy(alpha = 0.35f),
+                            1f to Palette.Background,
+                        )
                     )
                 )
+                if (tv) {
+                    Box(
+                        Modifier.fillMaxSize().background(
+                            Brush.horizontalGradient(listOf(Palette.Background.copy(alpha = 0.8f), Color.Transparent, Color.Transparent))
+                        )
+                    )
+                }
                 Column(
                     Modifier
-                        .fillMaxHeight()
-                        .fillMaxWidth(if (tv) 0.55f else 0.9f)
-                        .padding(if (tv) 36.dp else 18.dp),
-                    verticalArrangement = Arrangement.Bottom,
+                        .align(if (tv) Alignment.BottomStart else Alignment.BottomCenter)
+                        .fillMaxWidth(if (tv) 0.55f else 1f)
+                        .padding(horizontal = if (tv) 48.dp else 24.dp, vertical = if (tv) 28.dp else 20.dp),
+                    horizontalAlignment = if (tv) Alignment.Start else Alignment.CenterHorizontally,
                 ) {
                     Text(
                         if (current.kind == MediaKind.SHOW) "TV SHOW" else "MOVIE",
@@ -225,9 +240,12 @@ private fun Hero(
                     )
                     Text(
                         current.title,
-                        style = if (tv) MaterialTheme.typography.displaySmall else MaterialTheme.typography.headlineSmall,
+                        style = if (tv) MaterialTheme.typography.displayMedium else MaterialTheme.typography.displaySmall,
+                        fontWeight = FontWeight.Bold,
                         color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                        textAlign = if (tv) TextAlign.Start else TextAlign.Center,
                     )
+                    Spacer(Modifier.height(4.dp))
                     val meta = listOfNotNull(
                         current.year?.toString(),
                         current.runtimeMs?.let { formatDuration(it) },
@@ -237,18 +255,20 @@ private fun Hero(
                     if (meta.isNotBlank()) Text(meta, color = Palette.TextSecondary, style = MaterialTheme.typography.labelLarge)
                     if (tv && current.overview != null) {
                         Spacer(Modifier.height(8.dp))
-                        Text(current.overview, color = Palette.TextSecondary, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                        Text(current.overview, color = Palette.TextSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
-                    Spacer(Modifier.height(if (tv) 18.dp else 10.dp))
+                    Spacer(Modifier.height(if (tv) 18.dp else 14.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         if (current.isPlayable) GlassButton("Play", Icons.Filled.PlayArrow, primary = true) { onPlay(current) }
                         GlassButton("Details", Icons.Filled.Info) { onOpen(current) }
                     }
+                    if (!tv) Spacer(Modifier.height(18.dp))
                 }
             }
         }
         Row(
-            Modifier.align(Alignment.BottomEnd).padding(18.dp),
+            Modifier.align(if (tv) Alignment.BottomEnd else Alignment.BottomCenter)
+                .padding(horizontal = if (tv) 48.dp else 0.dp, vertical = if (tv) 36.dp else 12.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             items.indices.forEach { i ->

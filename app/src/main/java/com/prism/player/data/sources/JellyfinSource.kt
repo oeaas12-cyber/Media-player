@@ -94,8 +94,11 @@ class JellyfinSource(override val config: SourceConfig, private val deviceId: St
                     label = st.s("DisplayTitle") ?: st.s("Title"),
                 )
             }
+        // Same direct-play URL shape StreamBridge uses: stream.<container>, Static=true, api_key, DeviceId.
+        val container = source?.s("Container")?.substringBefore(',')?.trim()?.takeIf { it.matches(Regex("[A-Za-z0-9]+")) }
+        val streamName = if (container != null) "stream.$container" else "stream"
         return Playback(
-            uri = "$base/Videos/${item.nativeId}/stream?static=true&MediaSourceId=$msId&api_key=$token",
+            uri = "$base/Videos/${item.nativeId}/$streamName?MediaSourceId=$msId&Static=true&api_key=$token&DeviceId=${Uri.encode(deviceId)}",
             headers = headers,
             subtitles = subs,
         )
@@ -212,8 +215,8 @@ class JellyfinSource(override val config: SourceConfig, private val deviceId: St
                                 Net.send(
                                     Request.Builder().url("$base/Users/AuthenticateByName")
                                         .post(body)
-                                        .header("Accept", "application/json")
-                                        .header("User-Agent", "$CLIENT/$VERSION (Android)")
+                                        // Exactly the StreamBridge login: Content-Type (from the body)
+                                        // plus X-Emby-Authorization, nothing else.
                                         .apply { headers.forEach { (k, v) -> header(k, v) } }
                                         .build()
                                 )

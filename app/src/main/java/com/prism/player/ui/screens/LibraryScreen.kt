@@ -113,7 +113,7 @@ fun LibraryScreen(kind: MediaKind, onTab: (Tab) -> Unit, onOpen: (MediaItem) -> 
                 }
                 LazyVerticalGrid(
                     columns = GridCells.Adaptive(if (tv) 150.dp else 108.dp),
-                    contentPadding = PaddingValues(start = hPad, end = hPad, bottom = 48.dp),
+                    contentPadding = PaddingValues(start = hPad, end = hPad, bottom = 120.dp),
                     horizontalArrangement = Arrangement.spacedBy(if (tv) 24.dp else 14.dp),
                     verticalArrangement = Arrangement.spacedBy(if (tv) 26.dp else 18.dp),
                     modifier = Modifier.fillMaxSize(),
