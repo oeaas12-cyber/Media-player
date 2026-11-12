@@ -74,11 +74,11 @@ jobs:
           rm -rf $RES/mipmap-anydpi-v26
           for d in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
             n=${d%%:*}; s=${d##*:}
-            convert public/icon-512.png -resize ${s}x${s} $RES/mipmap-$n/ic_launcher.png
+            cp assets/icon-$s.png $RES/mipmap-$n/ic_launcher.png
             cp $RES/mipmap-$n/ic_launcher.png $RES/mipmap-$n/ic_launcher_round.png
             rm -f $RES/mipmap-$n/ic_launcher_foreground.png
           done
-          convert -size 320x180 xc:'#141733' \( public/icon-512.png -resize 120x120 \) -gravity center -composite $RES/drawable/banner.png
+          cp assets/banner.png $RES/drawable/banner.png
           cat $M
       - name: Build APK
         working-directory: web/android
@@ -145,8 +145,7 @@ jobs:
       - name: LG webOS package (.ipk)
         run: |
           mkdir webos && cp -r dist/. webos/ && cp web/tv/webos/appinfo.json webos/
-          convert web/public/icon-512.png -resize 80x80 webos/icon-80.png
-          convert web/public/icon-512.png -resize 130x130 webos/icon-130.png
+          cp web/assets/icon-80.png web/assets/icon-130.png webos/
           npm install -g @webos-tools/cli
           ares-package --no-minify webos -o .
           mv *.ipk Lumina-LG-webOS.ipk
