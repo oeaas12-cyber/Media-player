@@ -115,7 +115,7 @@ class JellyfinSource(override val config: SourceConfig, private val deviceId: St
             put("PositionTicks", positionMs * 10_000)
             put("CanSeek", true)
             put("IsPaused", false)
-        }.toString().toRequestBody("application/json".toMediaType())
+        }.toString().toByteArray().toRequestBody("application/json".toMediaType())
         Net.send(Request.Builder().url(base + path).post(body).apply { headers.forEach { (k, v) -> header(k, v) } }.build())
     }
 
@@ -198,8 +198,11 @@ class JellyfinSource(override val config: SourceConfig, private val deviceId: St
             // makes Emby fail to parse the header and answer 401, which looked like a wrong password.
             val styles = listOf("standard" to authHeaders(deviceId, null))
             // JSON body {Username, Pw} is what Emby's web helper sends; form is a fallback.
+            // Sent as bytes so the header is exactly "Content-Type: application/json", as StreamBridge
+            // sends it. (A String body makes OkHttp append "; charset=utf-8", which Emby can fail to
+            // recognise; it then reads an empty username/password and answers 401.)
             val pwJson = buildJsonObject { put("Username", username); put("Pw", password) }.toString()
-                .toRequestBody("application/json".toMediaType())
+                .toByteArray().toRequestBody("application/json".toMediaType())
             val pwForm = FormBody.Builder().add("Username", username).add("Pw", password).build()
             val bodies = listOf("JSON" to pwJson, "form" to pwForm)
 
@@ -217,6 +220,7 @@ class JellyfinSource(override val config: SourceConfig, private val deviceId: St
                                         .post(body)
                                         // Exactly the StreamBridge login: Content-Type (from the body)
                                         // plus X-Emby-Authorization, nothing else.
+                                        .header("Accept", "application/json, text/plain, */*")
                                         .apply { headers.forEach { (k, v) -> header(k, v) } }
                                         .build()
                                 )
