@@ -1,9 +1,63 @@
-# Prism Player
+# Lumina
 
-A frosted-glass media player for **Android TV, phones and tablets** that plays the
-movies and shows you already own: on a Jellyfin/Emby or Plex server, a network share
-(SMB) or a WebDAV folder. It's an original app built with Kotlin, Jetpack Compose and
-Media3/ExoPlayer, and it isn't affiliated with any other player.
+One media player for every screen: **web, Android phones and tablets, Android TV, Windows, Linux, LG TVs (webOS), Samsung TVs (Tizen), and iPhone/iPad** (as a home-screen web app).
+It plays the movies and shows on your own **Emby** or **Jellyfin** server. The app is original work and isn't affiliated with any other player.
+
+It lives in [`web/`](web/) as a single React + TypeScript codebase. The same code is packaged for each platform by
+[`.github/workflows/lumina.yml`](.github/workflows/lumina.yml).
+
+| Home (TV / desktop) | Movies |
+|---|---|
+| ![Home](docs/lumina/tv-home.png) | ![Movies](docs/lumina/tv-movies.png) |
+| **TV show** | **Player** |
+| ![Show](docs/lumina/tv-show.png) | ![Player](docs/lumina/tv-player-menu.png) |
+| **Settings** | **Who's watching?** |
+| ![Settings](docs/lumina/tv-settings.png) | ![Profiles](docs/lumina/tv-profiles.png) |
+
+| Phone: Home | Movies | Show | Settings |
+|---|---|---|---|
+| ![](docs/lumina/phone-home.png) | ![](docs/lumina/phone-movies.png) | ![](docs/lumina/phone-show.png) | ![](docs/lumina/phone-settings.png) |
+
+## What it does
+
+- **Sign in** with your server's username and password. The requests are the same ones the open-source
+  [StreamBridge](https://github.com/h4harsimran/streambridge) project sends (`POST /Users/AuthenticateByName` with a
+  `MediaBrowser` `X-Emby-Authorization` header and a JSON body, then `X-Emby-Token` on every call).
+- **Home** with featured artwork, Continue Watching, Next Up, recently added, favorites and top rated.
+- **Movies and TV Shows** grids that load page by page from the server, so very large libraries stay fast; sort, genre and watched filters.
+- **Details** with seasons and episodes, cast, similar titles, favorites and watched state (synced to the server).
+- **Player**: resume, skip, scrubbing, subtitles, audio tracks, next episode. Plays the original file, and can ask the server to convert it when the device can't play the format.
+- **Profiles**: "Who's watching?", each profile with its own servers; kids profiles are limited to PG titles by the server.
+- **TV remotes**: arrow keys move focus, OK selects, Back goes back, media keys control playback.
+
+## Develop and test
+
+```
+cd web
+npm install
+npm run dev          # http://localhost:5173
+npm run build        # output in web/dist
+node test/shots.mjs  # end-to-end checks against a strict mock Emby server + screenshots
+```
+
+## Platform notes
+
+| Platform | Package | Notes |
+|---|---|---|
+| Web, iPhone, iPad | `Lumina-web.zip` / GitHub Pages | On iPhone: open in Safari → Share → Add to Home Screen. An `https://` page can only reach `https://` servers. |
+| Android, Android TV | `Lumina-android.apk` | A WebView app; playback uses the device's built-in video support. |
+| Windows, Linux | `.exe` installer, `.AppImage` | Unsigned, so Windows shows a warning on first run. |
+| LG webOS | `.ipk` | Needs Developer Mode on the TV. |
+| Samsung Tizen | `.wgt` (unsigned) | Must be signed with your own Samsung certificate in Tizen Studio. |
+
+Format support depends on the device: browsers and WebViews can't decode every MKV, HEVC, DTS or TrueHD file. When direct play fails,
+Lumina asks the server for a converted stream, which only works if the server allows transcoding.
+
+---
+
+# Prism Player (original native Android app)
+
+The first version of this project, a native Kotlin app in [`app/`](app/). It is still built and released (tags `v0.x`), and adds Plex, SMB and WebDAV sources.
 
 ## Screenshots
 
