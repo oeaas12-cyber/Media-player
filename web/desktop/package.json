@@ -1,0 +1,19 @@
+{
+  "name": "lumina-desktop",
+  "productName": "Lumina",
+  "version": "1.0.0",
+  "description": "Lumina media player",
+  "author": "Lumina",
+  "main": "main.cjs",
+  "scripts": { "dist": "electron-builder --publish never" },
+  "devDependencies": { "electron": "33.2.0", "electron-builder": "25.1.8" },
+  "build": {
+    "appId": "app.lumina.player",
+    "productName": "Lumina",
+    "files": ["main.cjs", "app/**/*"],
+    "directories": { "output": "out", "buildResources": "build" },
+    "win": { "target": [{ "target": "nsis", "arch": ["x64"] }], "icon": "build/icon.png" },
+    "nsis": { "oneClick": true, "artifactName": "Lumina-Setup-${version}.exe" },
+    "linux": { "target": ["AppImage"], "category": "AudioVideo", "icon": "build/icon.png", "artifactName": "Lumina-${version}.AppImage" }
+  }
+}

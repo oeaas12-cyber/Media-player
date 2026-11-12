@@ -1,0 +1,189 @@
+name: Lumina (all platforms)
+
+on:
+  push:
+    paths: ["web/**", ".github/workflows/lumina.yml"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Publish a release with this version, e.g. 1.0.0 (leave empty to only build)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Build web app
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+          cd dist && zip -qr ../Lumina-web.zip .
+      - uses: actions/upload-artifact@v4
+        with: { name: web-dist, path: web/dist }
+      - uses: actions/upload-artifact@v4
+        with: { name: lumina-web, path: web/Lumina-web.zip }
+
+  pages:
+    # Hosts the web app (also the iPhone/iPad version: open it in Safari and Add to Home Screen).
+    # Needs Settings → Pages → Source: "GitHub Actions" once; until then this job is skipped over.
+    needs: web
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: web-dist, path: dist }
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: dist }
+      - uses: actions/deploy-pages@v4
+
+  android:
+    needs: web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - uses: actions/download-artifact@v4
+        with: { name: web-dist, path: web/dist }
+      - name: Create Android project (phone + Android TV)
+        working-directory: web
+        run: |
+          npm ci
+          npm install --no-save @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6
+          npx cap add android
+          npx cap sync android
+          M=android/app/src/main/AndroidManifest.xml
+          # Android TV: launcher entry, banner, no touchscreen requirement; allow http servers.
+          sed -i 's#<category android:name="android.intent.category.LAUNCHER" />#<category android:name="android.intent.category.LAUNCHER" />\n                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />#' $M
+          sed -i 's#<application#<uses-feature android:name="android.software.leanback" android:required="false" />\n    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />\n    <application android:banner="@drawable/banner" android:usesCleartextTraffic="true"#' $M
+          sed -i 's#android:configChanges="#android:screenOrientation="unspecified" android:configChanges="#' $M
+          RES=android/app/src/main/res
+          rm -rf $RES/mipmap-anydpi-v26
+          for d in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
+            n=${d%%:*}; s=${d##*:}
+            convert public/icon-512.png -resize ${s}x${s} $RES/mipmap-$n/ic_launcher.png
+            cp $RES/mipmap-$n/ic_launcher.png $RES/mipmap-$n/ic_launcher_round.png
+            rm -f $RES/mipmap-$n/ic_launcher_foreground.png
+          done
+          convert -size 320x180 xc:'#141733' \( public/icon-512.png -resize 120x120 \) -gravity center -composite $RES/drawable/banner.png
+          cat $M
+      - name: Build APK
+        working-directory: web/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --stacktrace
+      - name: Sign APK
+        env:
+          KEYSTORE_BASE64: ${{ secrets.PRISM_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.PRISM_KEYSTORE_PASSWORD }}
+        run: |
+          BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
+          IN=web/android/app/build/outputs/apk/release/app-release-unsigned.apk
+          $BT/zipalign -f 4 $IN aligned.apk
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > release.jks
+            PASS="${KEYSTORE_PASSWORD:-prism-release-key}"
+            $BT/apksigner sign --ks release.jks --ks-key-alias prism --ks-pass "pass:$PASS" --key-pass "pass:$PASS" --out Lumina-android.apk aligned.apk
+          else
+            keytool -genkeypair -keystore debug.jks -alias debug -keyalg RSA -validity 10000 -storepass android -keypass android -dname "CN=Debug"
+            $BT/apksigner sign --ks debug.jks --ks-key-alias debug --ks-pass pass:android --key-pass pass:android --out Lumina-android.apk aligned.apk
+          fi
+          $BT/apksigner verify Lumina-android.apk
+      - uses: actions/upload-artifact@v4
+        with: { name: lumina-android, path: Lumina-android.apk }
+
+  desktop:
+    needs: web
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - uses: actions/download-artifact@v4
+        with: { name: web-dist, path: web/desktop/app }
+      - name: Package desktop app
+        working-directory: web/desktop
+        shell: bash
+        run: |
+          mkdir -p build && cp ../public/icon-512.png build/icon.png
+          npm install --no-audit --no-fund
+          npm run dist
+          ls -la out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lumina-desktop-${{ matrix.os }}
+          path: |
+            web/desktop/out/*.exe
+            web/desktop/out/*.AppImage
+
+  tv:
+    needs: web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - uses: actions/download-artifact@v4
+        with: { name: web-dist, path: dist }
+      - name: LG webOS package (.ipk)
+        run: |
+          mkdir webos && cp -r dist/. webos/ && cp web/tv/webos/appinfo.json webos/
+          convert web/public/icon-512.png -resize 80x80 webos/icon-80.png
+          convert web/public/icon-512.png -resize 130x130 webos/icon-130.png
+          npm install -g @webos-tools/cli
+          ares-package --no-minify webos -o .
+          mv *.ipk Lumina-LG-webOS.ipk
+      - name: Samsung Tizen package (.wgt, unsigned)
+        run: |
+          mkdir tizen && cp -r dist/. tizen/ && cp web/tv/tizen/config.xml tizen/
+          cd tizen && zip -qr ../Lumina-Samsung-Tizen-unsigned.wgt .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lumina-tv
+          path: |
+            Lumina-LG-webOS.ipk
+            Lumina-Samsung-Tizen-unsigned.wgt
+
+  release:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.version != ''
+    needs: [web, android, desktop, tv]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: all, pattern: "lumina-*", merge-multiple: true }
+      - run: ls -la all
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: lumina-v${{ github.event.inputs.version }}
+          name: Lumina ${{ github.event.inputs.version }}
+          target_commitish: ${{ github.sha }}
+          make_latest: "false"
+          files: all/*
+          body: |
+            **Lumina** — one app for every screen.
+
+            | Platform | File | How to install |
+            |---|---|---|
+            | Android phone, tablet, Android TV | `Lumina-android.apk` | Open the file and allow the install. On TV, sideload it (for example with Downloader). |
+            | Windows | `Lumina-Setup-*.exe` | Run the installer. Windows may warn that the app is unsigned; choose "More info → Run anyway". |
+            | Linux | `Lumina-*.AppImage` | `chmod +x` the file and run it. |
+            | LG TV (webOS) | `Lumina-LG-webOS.ipk` | Needs Developer Mode on the TV, then install with LG's `ares-install` tool. |
+            | Samsung TV (Tizen) | `Lumina-Samsung-Tizen-unsigned.wgt` | Must be signed with your own Samsung certificate in Tizen Studio before a TV accepts it. |
+            | Web, iPhone, iPad | `Lumina-web.zip` | Host the files anywhere (or use the GitHub Pages link). On iPhone: open in Safari → Share → Add to Home Screen. |

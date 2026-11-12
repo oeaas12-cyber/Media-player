@@ -6,3 +6,10 @@ build/
 .DS_Store
 captures/
 .kotlin/
+web/node_modules/
+web/dist/
+web/android/
+web/desktop/node_modules/
+web/desktop/out/
+web/desktop/app/
+web/desktop/build/

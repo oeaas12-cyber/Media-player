@@ -1,0 +1,7 @@
+{
+  "appId": "app.lumina.player",
+  "appName": "Lumina",
+  "webDir": "dist",
+  "server": { "androidScheme": "http", "cleartext": true },
+  "android": { "allowMixedContent": true, "backgroundColor": "#07080d" }
+}

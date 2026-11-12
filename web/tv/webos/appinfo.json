@@ -1,0 +1,14 @@
+{
+  "id": "app.lumina.player",
+  "version": "1.0.0",
+  "vendor": "Lumina",
+  "type": "web",
+  "main": "index.html",
+  "title": "Lumina",
+  "icon": "icon-80.png",
+  "largeIcon": "icon-130.png",
+  "bgColor": "#07080d",
+  "iconColor": "#1b1f4b",
+  "resolution": "1920x1080",
+  "disableBackHistoryAPI": true
+}
