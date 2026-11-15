@@ -1,7 +1,7 @@
 {
   "name": "lumina-desktop",
   "productName": "Lumina",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Lumina media player",
   "author": "Lumina",
   "main": "main.cjs",

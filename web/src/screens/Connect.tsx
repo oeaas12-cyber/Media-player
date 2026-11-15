@@ -42,23 +42,23 @@ export function Connect({ firstRun }: { firstRun: boolean }) {
         <p className="subtle" style={{ marginBottom: '1.4rem', fontSize: '0.92rem', lineHeight: 1.4 }}>
           Sign in with your Emby or Jellyfin username and password.
         </p>
-        {error ? <div className="error">{error}</div> : null}
+        {error ? <div className="error" role="alert"><span aria-hidden="true">⚠ </span>{error}</div> : null}
         <label className="field">
           <span>Server address</span>
           <div className="input">
-            <input data-autofocus value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://my-server.example.com" inputMode="url" autoCapitalize="off" autoCorrect="off" spellCheck={false} />
+            <input data-autofocus id="server" name="server" required value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://my-server.example.com" inputMode="url" autoCapitalize="off" autoCorrect="off" spellCheck={false} />
           </div>
         </label>
         <label className="field">
           <span>Username</span>
           <div className="input">
-            <input value={user} onChange={(e) => setUser(e.target.value)} autoCapitalize="off" autoCorrect="off" spellCheck={false} autoComplete="username" />
+            <input id="username" name="username" required value={user} onChange={(e) => setUser(e.target.value)} autoCapitalize="off" autoCorrect="off" spellCheck={false} autoComplete="username" />
           </div>
         </label>
         <label className="field">
           <span>Password</span>
           <div className="input">
-            <input type={show ? 'text' : 'password'} value={pass} onChange={(e) => setPass(e.target.value)} autoCapitalize="off" autoCorrect="off" spellCheck={false} autoComplete="current-password" style={{ paddingRight: '3rem' }} />
+            <input id="current-password" name="password" type={show ? 'text' : 'password'} value={pass} onChange={(e) => setPass(e.target.value)} autoCapitalize="off" autoCorrect="off" spellCheck={false} autoComplete="current-password" style={{ paddingRight: '3rem' }} />
             <button type="button" className="eye" onClick={() => setShow(!show)} aria-label={show ? 'Hide password' : 'Show password'}>
               <Icon name="eye" />
             </button>

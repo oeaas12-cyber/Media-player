@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { AVATARS } from '../lib/store'
-import type { Item } from '../lib/types'
+import type { Item, Source } from '../lib/types'
 import { duration, episodeLabel } from '../lib/format'
-import { go } from '../lib/router'
+import { go, markPoster } from '../lib/router'
 
 const PATHS: Record<string, string> = {
   home: 'M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z',
@@ -48,12 +48,33 @@ export function Avatar({ name, color, size = 2.2 }: { name: string; color: numbe
   )
 }
 
-/** Image that fades in and quietly disappears if it fails to load. */
-export function Img({ src, alt = '', className }: { src?: string; alt?: string; className?: string }) {
+/**
+ * Image that quietly disappears if it fails to load. Below-the-fold images load lazily;
+ * `priority="high"` is for the one image that dominates the first screen, `"low"` for
+ * images that are on screen but hidden (other hero slides).
+ */
+export function Img({ src, alt = '', className, priority }: { src?: string; alt?: string; className?: string; priority?: 'high' | 'low' }) {
   const [ok, setOk] = useState(true)
   useEffect(() => setOk(true), [src])
   if (!src || !ok) return null
-  return <img className={className} src={src} alt={alt} loading="lazy" onError={() => setOk(false)} />
+  const hints: Record<string, string> = priority === 'high' ? { fetchpriority: 'high' } : priority === 'low' ? { fetchpriority: 'low', loading: 'lazy' } : { loading: 'lazy' }
+  return <img className={className} src={src} alt={alt} decoding="async" onError={() => setOk(false)} {...hints} />
+}
+
+/** Titles the user has already seen in a list, so the details page can open instantly. */
+const seen = new Map<string, Item>()
+export const remember = (items: Item[]) => {
+  items.forEach((i) => seen.set(i.id, i))
+  return items
+}
+export const recall = (id: string) => seen.get(id)
+
+/** Per-library memory of loaded screens, so going back shows them at once instead of reloading. */
+const caches = new WeakMap<object, Map<string, unknown>>()
+export function cacheOf(source: Source): Map<string, unknown> {
+  let c = caches.get(source)
+  if (!c) caches.set(source, (c = new Map()))
+  return c
 }
 
 export const open = (i: Item) => go(i.kind === 'episode' && i.seriesId ? `/item/${encodeURIComponent(i.id)}` : `/item/${encodeURIComponent(i.id)}`)
@@ -66,7 +87,14 @@ export function Card({ item, wide, onFocus }: { item: Item; wide?: boolean; onFo
   return (
     <button
       className={'card' + (wide ? ' wide' : '')}
-      onClick={() => (wide && (item.kind === 'movie' || item.kind === 'episode') ? play(item) : open(item))}
+      data-item={wide ? undefined : item.id}
+      onClick={(e) => {
+        if (wide && (item.kind === 'movie' || item.kind === 'episode')) return play(item)
+        seen.set(item.id, item)
+        // The poster the user tapped becomes the poster on the details page.
+        if (!wide && item.poster) markPoster(e.currentTarget.querySelector<HTMLElement>('.art'))
+        open(item)
+      }}
       onFocus={() => onFocus?.(item)}
       aria-label={item.title}
     >
@@ -104,14 +132,26 @@ export function Card({ item, wide, onFocus }: { item: Item; wide?: boolean; onFo
 }
 
 export function ShelfRow({ title, items, wide, onFocus }: { title: string; items: Item[]; wide?: boolean; onFocus?: (i: Item) => void }) {
+  const row = useRef<HTMLDivElement>(null)
   if (!items.length) return null
+  const page = (dir: 1 | -1) => {
+    const el = row.current
+    if (el) el.scrollBy({ left: dir * el.clientWidth * 0.85, behavior: 'smooth' })
+  }
   return (
-    <section className="shelf">
+    <section className="shelf" aria-label={title}>
       <h2 className="pad">{title}</h2>
-      <div className="row">
-        {items.map((i) => (
-          <Card key={i.id} item={i} wide={wide} onFocus={onFocus} />
-        ))}
+      <div className="row-wrap">
+        <div className="row" ref={row}>
+          {items.map((i) => (
+            <Card key={i.id} item={i} wide={wide} onFocus={onFocus} />
+          ))}
+        </div>
+        {/* Mouse-only paging; remotes, keyboards and touch scroll the row directly. */}
+        <div data-nofocus>
+          <button className="row-arrow prev" tabIndex={-1} aria-label={`Scroll ${title} back`} onClick={() => page(-1)}><Icon name="back" /></button>
+          <button className="row-arrow next" tabIndex={-1} aria-label={`Scroll ${title} forward`} onClick={() => page(1)}><Icon name="chevron" /></button>
+        </div>
       </div>
     </section>
   )
@@ -129,23 +169,71 @@ export function Meta({ item }: { item: Item }) {
 }
 
 export function Spinner() {
-  return <div className="spinner" />
+  return <div className="spinner" role="status" aria-label="Loading" />
 }
 
-/** Loads async data for a screen; reloads when deps change. */
-export function useAsync<T>(fn: () => Promise<T>, deps: unknown[]): { data?: T; error?: string; loading: boolean; reload: () => void } {
-  const [state, set] = useState<{ data?: T; error?: string; loading: boolean }>({ loading: true })
-  const [n, setN] = useState(0)
-  const alive = useRef(true)
+/**
+ * Native modal dialog: the browser supplies the focus trap, Esc, the backdrop and returning
+ * focus. Clicking outside closes it too (closedby="any", with a fallback for older browsers).
+ */
+export function Modal({ onClose, labelledBy, children }: { onClose: () => void; labelledBy: string; children: ReactNode }) {
+  const ref = useRef<HTMLDialogElement>(null)
   useEffect(() => {
-    alive.current = true
-    set((s) => ({ ...s, loading: true, error: undefined }))
+    const d = ref.current
+    if (!d) return
+    if (!d.open) {
+      if (typeof d.showModal === 'function') d.showModal()
+      else d.setAttribute('open', '')
+    }
+    ;(d.querySelector('[data-autofocus]') as HTMLElement | null)?.focus()
+    return () => {
+      if (d.open && typeof d.close === 'function') d.close()
+    }
+  }, [])
+  const lightDismiss = { closedby: 'any' }
+  return (
+    <dialog
+      ref={ref}
+      className="modal"
+      aria-labelledby={labelledBy}
+      data-focus-scope
+      onClose={onClose}
+      onClick={(e) => {
+        // Fallback light dismiss: a click on the backdrop targets the dialog element itself.
+        if (e.target === e.currentTarget && !('closedBy' in HTMLDialogElement.prototype)) e.currentTarget.close()
+      }}
+      {...lightDismiss}
+    >
+      <div className="panel">{children}</div>
+    </dialog>
+  )
+}
+
+/**
+ * Loads async data for a screen; reloads when deps change. With a cache, a screen the user
+ * has already visited shows its previous data immediately and refreshes in the background.
+ */
+export function useAsync<T>(
+  fn: () => Promise<T>,
+  deps: unknown[],
+  cache?: { map: Map<string, unknown>; key: string },
+): { data?: T; error?: string; loading: boolean; reload: () => void } {
+  const cached = cache ? (cache.map.get(cache.key) as T | undefined) : undefined
+  const [state, set] = useState<{ data?: T; error?: string; loading: boolean }>({ data: cached, loading: cached === undefined })
+  const [n, setN] = useState(0)
+  useEffect(() => {
+    let alive = true
+    const start = cache ? (cache.map.get(cache.key) as T | undefined) : undefined
+    set({ data: start, loading: start === undefined })
     fn().then(
-      (data) => alive.current && set({ data, loading: false }),
-      (e) => alive.current && set({ error: e?.message || 'Something went wrong', loading: false }),
+      (data) => {
+        cache?.map.set(cache.key, data)
+        if (alive) set({ data, loading: false })
+      },
+      (e) => alive && set((s) => (s.data !== undefined ? { ...s, loading: false } : { error: e?.message || 'Something went wrong', loading: false })),
     )
     return () => {
-      alive.current = false
+      alive = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, n])

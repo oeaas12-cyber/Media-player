@@ -18,7 +18,7 @@
 import type { Item, Kind, ListOptions, PlaybackInfo, Server, Shelf, Source, Track } from './types'
 import { languageName } from './format'
 
-export const APP_VERSION = '1.0.0'
+export const APP_VERSION = '1.1.0'
 const CLIENT = 'Lumina'
 
 export function deviceName(): string {

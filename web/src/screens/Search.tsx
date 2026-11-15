@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Item, Source } from '../lib/types'
-import { Card, Icon, Spinner } from '../components/ui'
+import { Card, Icon, Spinner, remember } from '../components/ui'
 
 export function Search({ source }: { source: Source }) {
   const [q, setQ] = useState('')
@@ -12,7 +12,7 @@ export function Search({ source }: { source: Source }) {
     let alive = true
     setLoading(true)
     const t = setTimeout(() => {
-      source.search(term).then((r) => alive && setItems(r), () => alive && setItems([])).then(() => alive && setLoading(false))
+      source.search(term).then((r) => alive && setItems(remember(r)), () => alive && setItems([])).then(() => alive && setLoading(false))
     }, 350)
     return () => { alive = false; clearTimeout(t) }
   }, [q, source])

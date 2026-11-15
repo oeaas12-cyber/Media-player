@@ -1,7 +1,7 @@
 {
   "name": "lumina",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Lumina — a media player for your own Emby and Jellyfin libraries",
   "author": "Lumina",
   "type": "module",

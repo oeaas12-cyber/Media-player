@@ -1,20 +1,29 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Item, SortKey, Source } from '../lib/types'
-import { Card, ErrorBox, Spinner, useAsync } from '../components/ui'
+import { Card, ErrorBox, Spinner, cacheOf, remember, useAsync } from '../components/ui'
 
 const SORTS: [SortKey, string][] = [['title', 'A–Z'], ['added', 'Recently Added'], ['year', 'Year'], ['rating', 'Rating']]
-const FILTERS: ['all' | 'unwatched' | 'favorites', string][] = [['all', 'All'], ['unwatched', 'Unwatched'], ['favorites', 'Favorites']]
+const FILTERS: [Filter, string][] = [['all', 'All'], ['unwatched', 'Unwatched'], ['favorites', 'Favorites']]
 const PAGE = 60
 
+type Filter = 'all' | 'unwatched' | 'favorites'
+/** The sort and filters last used on each tab, so they survive opening a title and coming back. */
+const lastView: Record<string, { sort: SortKey; filter: Filter; genre?: string }> = {}
+
 export function Library({ source, kind }: { source: Source; kind: 'movie' | 'show' }) {
-  const [sort, setSort] = useState<SortKey>('title')
-  const [filter, setFilter] = useState<'all' | 'unwatched' | 'favorites'>('all')
-  const [genre, setGenre] = useState<string>()
-  const [items, setItems] = useState<Item[]>([])
-  const [total, setTotal] = useState(0)
-  const [loading, setLoading] = useState(true)
+  const cache = cacheOf(source)
+  const start = lastView[kind] || { sort: 'title' as SortKey, filter: 'all' as Filter }
+  const [sort, setSort] = useState<SortKey>(start.sort)
+  const [filter, setFilter] = useState<Filter>(start.filter)
+  const [genre, setGenre] = useState<string | undefined>(start.genre)
+  lastView[kind] = { sort, filter, genre }
+  const key = `list:${kind}:${sort}:${filter}:${genre || ''}`
+  const kept = cache.get(key) as { items: Item[]; total: number } | undefined
+  const [items, setItems] = useState<Item[]>(kept?.items || [])
+  const [total, setTotal] = useState(kept?.total || 0)
+  const [loading, setLoading] = useState(!kept)
   const [error, setError] = useState('')
-  const genres = useAsync(() => source.genres(kind).catch(() => [] as string[]), [source, kind])
+  const genres = useAsync(() => source.genres(kind).catch(() => [] as string[]), [source, kind], { map: cache, key: `genres:${kind}` })
   const req = useRef(0)
   const sentinel = useRef<HTMLDivElement>(null)
 
@@ -25,7 +34,12 @@ export function Library({ source, kind }: { source: Source; kind: 'movie' | 'sho
     try {
       const r = await source.list(kind, { start, limit: PAGE, sort, genre, filter })
       if (id !== req.current) return
-      setItems((prev) => (start === 0 ? r.items : [...prev, ...r.items]))
+      remember(r.items)
+      setItems((prev) => {
+        const next = start === 0 ? r.items : [...prev, ...r.items]
+        cache.set(key, { items: next, total: r.total })
+        return next
+      })
       setTotal(r.total)
     } catch (e: any) {
       if (id === req.current) setError(e?.message || 'Could not load')
@@ -34,6 +48,16 @@ export function Library({ source, kind }: { source: Source; kind: 'movie' | 'sho
     }
   }
   useEffect(() => {
+    const c = cache.get(key) as { items: Item[]; total: number } | undefined
+    if (c) {
+      // Already loaded in this session: show it as it was.
+      req.current++
+      setItems(c.items)
+      setTotal(c.total)
+      setLoading(false)
+      setError('')
+      return
+    }
     setItems([])
     load(0)
   }, [source, kind, sort, filter, genre])

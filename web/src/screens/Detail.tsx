@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react'
 import type { Item, Source } from '../lib/types'
 import { clock, duration } from '../lib/format'
 import { back } from '../lib/router'
-import { ErrorBox, Icon, Img, Meta, ShelfRow, Spinner, play, useAsync } from '../components/ui'
+import { ErrorBox, Icon, Img, Meta, ShelfRow, Spinner, play, recall, remember, useAsync } from '../components/ui'
 
 export function Detail({ source, id, onBackdrop }: { source: Source; id: string; onBackdrop: (src?: string) => void }) {
   const q = useAsync(() => source.item(id), [source, id])
-  const item = q.data
+  // Show what the list already knew straight away; the full details replace it when they arrive.
+  const item = q.data || recall(id)
   const [patch, setPatch] = useState<Partial<Item>>({})
   useEffect(() => setPatch({}), [id])
   useEffect(() => { if (item) onBackdrop(item.backdrop || item.poster) }, [item?.id])
@@ -22,11 +23,19 @@ export function Detail({ source, id, onBackdrop }: { source: Source; id: string;
     <div className="page flush">
       <BackButton />
       <header className="detail-hero">
-        {it.backdrop ? <img className="hero-art" src={it.backdrop} alt="" /> : null}
-        <div className="detail-body">
-          {it.seriesTitle && it.kind !== 'show' ? <div className="subtle" style={{ fontWeight: 700, marginBottom: '0.3rem' }}>{it.seriesTitle}</div> : null}
-          {it.logo && it.kind !== 'episode' ? <Img className="hero-logo" src={it.logo} alt={it.title} /> : <h1 className="hero-title">{it.title}</h1>}
-          <Meta item={it} />
+        <Img className="hero-art" src={it.backdrop} priority="high" />
+        <div className={'detail-body' + (it.poster ? ' has-poster' : '')}>
+          {it.poster ? (
+            <div className="d-poster">
+              <Img src={it.poster} alt="" priority="high" />
+            </div>
+          ) : null}
+          <div className="d-head">
+            {it.seriesTitle && it.kind !== 'show' ? <div className="subtle" style={{ fontWeight: 700, marginBottom: '0.3rem' }}>{it.seriesTitle}</div> : null}
+            {it.logo && it.kind !== 'episode' ? <Img className="hero-logo" src={it.logo} alt={it.title} priority="high" /> : <h1 className="hero-title" tabIndex={-1}>{it.title}</h1>}
+            <Meta item={it} />
+          </div>
+          <div className="d-rest">
           {it.overview ? <p className="detail-over">{it.overview}</p> : <div style={{ height: '1.2rem' }} />}
           <div className="actions">
             {playable ? (
@@ -55,6 +64,7 @@ export function Detail({ source, id, onBackdrop }: { source: Source; id: string;
               {duration((it.runtimeMs || 0) - (it.resumeMs || 0))} left
             </div>
           ) : null}
+          </div>
         </div>
       </header>
       {it.kind === 'show' ? <Seasons source={source} show={it} /> : null}
@@ -86,7 +96,7 @@ function BackButton() {
 }
 
 function Similar({ source, id }: { source: Source; id: string }) {
-  const q = useAsync(() => source.similar(id), [source, id])
+  const q = useAsync(() => source.similar(id).then(remember), [source, id])
   return <ShelfRow title="More Like This" items={q.data || []} />
 }
 

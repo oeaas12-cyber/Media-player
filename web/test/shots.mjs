@@ -49,10 +49,32 @@ async function run(name, viewport, scale) {
   await page.mouse.wheel(0, 30000); await page.waitForTimeout(1200)
   const after = await page.locator('.grid .card').count()
   if (!(after > before)) fail(`${name}: the grid did not load more (${before} → ${after})`)
+  // Open a title from the grid, then go back: the list must still be there, at the same scroll position.
+  await page.goto(APP + '#/movies'); await page.waitForSelector('.grid .card')
+  await page.mouse.wheel(0, 900); await page.waitForTimeout(500)
+  const target = page.locator('.grid .card').nth(name === 'tv' ? 30 : 16)
+  await target.scrollIntoViewIfNeeded(); await page.waitForTimeout(300)
+  const y0 = await page.evaluate(() => window.scrollY)
+  if (y0 < 200) fail(`${name}: test setup did not scroll the grid`)
+  const tid = await target.getAttribute('data-item')
+  await target.click()
+  await page.waitForSelector('.d-poster img', { timeout: 3000 }).catch(() => fail(`${name}: details did not open with a poster`))
+  if (!page.url().includes('/item/' + tid)) fail(`${name}: opened the wrong title`)
+  await page.goBack(); await page.waitForTimeout(700)
+  const cards = await page.locator('.grid .card').count()
+  const y1 = await page.evaluate(() => window.scrollY)
+  if (cards < 60) fail(`${name}: the grid was not kept after going back (${cards} cards)`)
+  if (Math.abs(y1 - y0) > 40) fail(`${name}: scroll position was not restored (${y0} → ${y1})`)
+
   await page.goto(APP + '#/item/mv1'); await page.waitForSelector('.detail-body'); await shot('movie')
   await page.goto(APP + '#/item/sh1'); await page.waitForSelector('.episode'); await shot('show')
   await page.goto(APP + '#/search'); await page.fill('.input input', 'sintel'); await page.waitForSelector('.grid .card'); await shot('search')
   await page.goto(APP + '#/settings'); await page.waitForSelector('.group'); await shot('settings')
+  // Profile editor is a native dialog: Esc closes it and must not leave the screen.
+  await page.click('text=Add profile'); await page.waitForSelector('dialog[open]'); await shot('profile-editor')
+  await page.keyboard.press('Escape'); await page.waitForTimeout(300)
+  if (await page.locator('dialog[open]').count()) fail(`${name}: Esc did not close the dialog`)
+  if (!page.url().endsWith('#/settings')) fail(`${name}: Esc left the Settings screen (${page.url()})`)
 
   await page.goto(APP + '#/play/mv0?t=0'); await page.waitForSelector('video')
   await page.waitForFunction(() => document.querySelector('video')?.currentTime > 1, null, { timeout: 15000 }).catch(() => fail(`${name}: video did not start playing`))
@@ -77,6 +99,13 @@ async function run(name, viewport, scale) {
     const focused = await page.evaluate(() => document.activeElement?.className || '')
     if (!focused.includes('card')) fail(`remote: expected a card to be focused, got "${focused}"`)
     await shot('remote-focus')
+    // Keep going down: shelves rendered lazily must still be reachable with the remote.
+    const seenShelves = new Set()
+    for (let n = 0; n < 8; n++) {
+      await page.keyboard.press('ArrowDown'); await page.waitForTimeout(150)
+      seenShelves.add(await page.evaluate(() => document.activeElement?.closest('.shelf')?.querySelector('h2')?.textContent || ''))
+    }
+    for (const t of ['Recently Added TV Shows', 'Favorites', 'Top Rated Movies']) if (!seenShelves.has(t)) fail(`remote: could not reach the "${t}" row (${[...seenShelves].join(' | ')})`)
     await page.keyboard.press('Enter'); await page.waitForTimeout(800)
     if (!/#\/(item|play)\//.test(page.url())) fail(`remote: Enter did not open the focused title (${page.url()})`)
   }

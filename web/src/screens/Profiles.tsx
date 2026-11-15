@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { actions, AVATARS, useStore } from '../lib/store'
 import type { Profile } from '../lib/types'
-import { Avatar, Icon } from '../components/ui'
+import { Avatar, Icon, Modal } from '../components/ui'
 
 /** "Who's watching?" — pick, add and edit profiles. Each profile has its own servers and history. */
 export function Profiles({ onPicked, canCancel }: { onPicked: () => void; canCancel: boolean }) {
@@ -50,15 +50,14 @@ export function ProfileEditor({ profile, canDelete, onClose, nextColor }: { prof
     onClose()
   }
   return (
-    <div className="overlay" data-focus-scope>
-      <div className="panel">
+    <Modal onClose={onClose} labelledBy="profile-editor-title">
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.3rem' }}>
           <Avatar name={name || '?'} color={color} size={3.6} />
-          <h2 style={{ marginLeft: '1rem', fontSize: '1.4rem', fontWeight: 750 }}>{profile ? 'Edit profile' : 'New profile'}</h2>
+          <h2 id="profile-editor-title" style={{ marginLeft: '1rem', fontSize: '1.4rem', fontWeight: 750 }}>{profile ? 'Edit profile' : 'New profile'}</h2>
         </div>
         <label className="field">
           <span>Name</span>
-          <div className="input"><input data-autofocus value={name} maxLength={20} onChange={(e) => setName(e.target.value)} /></div>
+          <div className="input"><input data-autofocus name="profile-name" autoComplete="off" value={name} maxLength={20} onChange={(e) => setName(e.target.value)} /></div>
         </label>
         <div className="field">
           <span>Colour</span>
@@ -84,7 +83,6 @@ export function ProfileEditor({ profile, canDelete, onClose, nextColor }: { prof
             </button>
           ) : null}
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }
